@@ -79,19 +79,27 @@ concentrator).
 
 ## Quickstart (2 minutes, no LDAP)
 
+Prebuilt images are published to the GitHub Container Registry, so all you need
+is Docker:
+
 ```sh
-go build -o wgroster ./cmd/wgroster
+mkdir -p data
 cat > config.yaml <<'EOF'
-listen: "127.0.0.1:8080"
+listen: ":8080"
 session_key: "dev-only-change-me"
-database: "./wgroster.db"
+database: "/data/wgroster.db"
 vpn_cidr: "10.0.0.0/16"
 local_admin:
   username: "admin"
   password: "admin"      # dev only; use password_hash in production
 EOF
-./wgroster -config config.yaml
+docker run --rm -p 8080:8080 \
+  -v "$PWD/config.yaml:/config/config.yaml:ro" \
+  -v "$PWD/data:/data" \
+  ghcr.io/wgroster/wgroster:latest
 ```
+
+Prefer building from source? See [Binary](#binary) below.
 
 Open <http://127.0.0.1:8080>, sign in as `admin` / `admin`, then:
 
@@ -142,11 +150,17 @@ echo -n 's3cret' | ./wgroster -hash-password   # -> $2a$10$...  (local_admin.pas
 
 ```sh
 cp config.example.yaml config.yaml   # then edit it
-docker compose up -d --build
+docker compose up -d
 ```
 
-The database lives in `./data`; the config is mounted read-only. Set `TZ`
-(e.g. `environment: { TZ: Europe/Paris }`) for local times in the UI/audit log.
+Compose pulls `ghcr.io/wgroster/wgroster:latest`; the database lives in `./data`
+and the config is mounted read-only. To build the image locally instead,
+uncomment `build: .` in `docker-compose.yml` and run `docker compose up -d
+--build`. Set `TZ` (e.g. `environment: { TZ: Europe/Paris }`) for local times in
+the UI/audit log.
+
+Image tags: `latest` (default branch), `vX.Y.Z` / `vX.Y` (releases), and the
+commit SHA. Pin a release tag in production.
 
 ### Binary
 

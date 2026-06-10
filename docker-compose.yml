@@ -1,7 +1,9 @@
 services:
   wgroster:
-    build: .
-    image: wgroster:latest
+    image: ghcr.io/wgroster/wgroster:latest
+    # To build the image locally instead of pulling it, uncomment the next line
+    # and run `docker compose up -d --build`.
+    # build: .
     restart: unless-stopped
     ports:
       # Bound to localhost: terminate TLS at a reverse proxy in front (and set
