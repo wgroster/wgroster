@@ -1,0 +1,147 @@
+{{define "content"}}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Endpoints</h1>
+  <span class="text-xs text-slate-400 dark:text-slate-500">VPN concentrators</span>
+</div>
+
+<details class="group rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-8 overflow-hidden bg-white dark:bg-slate-900">
+  <summary class="cursor-pointer list-none px-6 py-4 flex items-center gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+    <span class="h-8 w-8 grid place-items-center rounded-lg bg-white/20 text-lg leading-none">+</span>
+    <span class="font-medium">New endpoint</span>
+    <span class="ml-auto text-white/80 text-sm group-open:hidden">click to expand</span>
+  </summary>
+  <form method="post" action="/admin/endpoints" class="p-6 space-y-6">
+    <input type="hidden" name="csrf" value="{{.Session.CSRF}}">
+    <fieldset class="space-y-4">
+      <legend class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Identity</legend>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Name
+          <input name="name" required placeholder="paris" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Public endpoint (host:port)
+          <input name="host_port" required placeholder="vpn-par.example.com:51820" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      </div>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Public key
+        <input name="public_key" required placeholder="abc...=" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    </fieldset>
+    <fieldset class="space-y-4">
+      <legend class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Routing &amp; options</legend>
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">AllowedIPs (networks behind this endpoint)
+        <input name="allowed_ips" placeholder="10.0.0.0/8, 192.168.1.0/24" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <div class="grid sm:grid-cols-4 gap-4">
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">DNS
+          <input name="dns" placeholder="10.0.0.1" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Hub tunnel IP
+          <input name="tunnel_ip" placeholder="10.0.0.1" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">MTU
+          <input name="mtu" type="number" placeholder="0" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Keepalive
+          <input name="persistent_keepalive" type="number" placeholder="25" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      </div>
+    </fieldset>
+    <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-5 py-2.5 shadow-sm">Create endpoint</button>
+  </form>
+</details>
+
+{{if not .Data.Endpoints}}
+  <p class="text-slate-500 dark:text-slate-400 text-sm">No endpoint yet — create one above.</p>
+{{else}}
+<div class="mb-4">
+  <input id="e-search" type="search" placeholder="Search endpoint…"
+         class="w-full sm:w-72 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+</div>
+{{end}}
+
+<div class="space-y-4">
+{{range .Data.Endpoints}}
+{{$ev := .}}
+{{$e := .E}}
+<div class="e-item bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col"
+     data-haystack="{{lower $e.Name}} {{lower $e.HostPort}}">
+  <div class="flex items-start gap-3">
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2">
+        <span class="font-semibold text-slate-900 dark:text-slate-100">{{$e.Name}}</span>
+        {{if not $ev.HasReport}}
+          <span class="text-xs rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5">no data</span>
+        {{else if $ev.ReportFresh}}
+          <span title="{{exact $ev.LastReport}}" class="inline-flex items-center gap-1 text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 cursor-help"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>live · {{ago $ev.LastReport}}</span>
+        {{else}}
+          <span title="{{exact $ev.LastReport}}" class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 cursor-help">stale · {{ago $ev.LastReport}}</span>
+        {{end}}
+      </div>
+      <div class="text-sm text-slate-500 dark:text-slate-400 font-mono mt-0.5">{{$e.HostPort}}</div>
+    </div>
+    <span class="shrink-0 text-xs rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1">{{$ev.ExpectedN}} peer{{if ne $ev.ExpectedN 1}}s{{end}}</span>
+  </div>
+
+  <dl class="mt-3 text-sm space-y-1">
+    <div class="flex gap-2"><dt class="text-slate-400 dark:text-slate-500 w-20 shrink-0">AllowedIPs</dt><dd class="font-mono text-slate-700 dark:text-slate-300">{{if $e.AllowedIPs}}{{$e.AllowedIPs}}{{else}}0.0.0.0/0{{end}}</dd></div>
+    <div class="flex gap-2"><dt class="text-slate-400 dark:text-slate-500 w-20 shrink-0">Key</dt><dd class="font-mono text-slate-500 dark:text-slate-400 text-xs truncate">{{$e.PublicKey}}</dd></div>
+  </dl>
+
+  <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 text-sm">
+    <details class="flex-1">
+      <summary class="cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white select-none">⚙ Concentrator setup</summary>
+      <div class="mt-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-3">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-slate-500 dark:text-slate-400">Upload token</span>
+            <button type="button" data-copy="#token-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button>
+            <form method="post" action="/admin/endpoints/{{$e.ID}}/regenerate-token" class="ml-auto"
+                  data-confirm="Regenerate the token? The concentrator must be updated.">
+              <input type="hidden" name="csrf" value="{{$.Session.CSRF}}">
+              <button class="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white underline">regenerate</button>
+            </form>
+          </div>
+          <code id="token-{{$e.ID}}" class="block font-mono break-all bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">{{$e.UploadToken}}</code>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Status push (cron)</span>
+            <button type="button" data-copy="#push-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button></div>
+          <pre id="push-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">wg show all dump | curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
+  --data-binary @- {{$.Data.BaseURL}}/api/endpoints/{{$e.ID}}/status</pre>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Expected peers</span>
+            <button type="button" data-copy="#peers-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button></div>
+          <pre id="peers-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
+  "{{$.Data.BaseURL}}/api/endpoints/{{$e.ID}}/expected-peers?format=wg"</pre>
+        </div>
+      </div>
+    </details>
+    <form method="post" action="/admin/endpoints/{{$e.ID}}/delete" data-confirm="Delete endpoint {{$e.Name}}?">
+      <input type="hidden" name="csrf" value="{{$.Session.CSRF}}">
+      <button class="text-red-600 hover:text-red-800">Delete</button>
+    </form>
+  </div>
+
+  <details class="mt-3">
+    <summary class="cursor-pointer text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white select-none">✎ Edit</summary>
+    <form method="post" action="/admin/endpoints/{{$e.ID}}" class="mt-3 grid sm:grid-cols-2 gap-3">
+      <input type="hidden" name="csrf" value="{{$.Session.CSRF}}">
+      <label class="block text-sm">Name
+        <input name="name" required value="{{$e.Name}}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <label class="block text-sm">Public endpoint
+        <input name="host_port" required value="{{$e.HostPort}}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <label class="block text-sm sm:col-span-2">Public key
+        <input name="public_key" required value="{{$e.PublicKey}}" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <label class="block text-sm sm:col-span-2">AllowedIPs
+        <input name="allowed_ips" value="{{$e.AllowedIPs}}" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <label class="block text-sm">DNS
+        <input name="dns" value="{{$e.DNS}}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <label class="block text-sm">Hub tunnel IP
+        <input name="tunnel_ip" value="{{$e.TunnelIP}}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <label class="block text-sm">MTU
+        <input name="mtu" type="number" value="{{$e.MTU}}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <label class="block text-sm">Keepalive
+        <input name="persistent_keepalive" type="number" value="{{$e.PersistentKeepalive}}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
+      <div class="sm:col-span-2">
+        <button class="bg-slate-900 hover:bg-slate-700 text-white font-medium rounded-lg px-4 py-2">Save changes</button>
+      </div>
+    </form>
+  </details>
+</div>
+{{end}}
+</div>
+
+{{end}}

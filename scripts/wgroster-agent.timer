@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the wgroster agent regularly
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=30
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

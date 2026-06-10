@@ -1,0 +1,107 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · wgroster</title>
+  <meta name="description" content="Self-service WireGuard configs and live fleet status.">
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v={{.AssetV}}">
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}'>
+  <script src="/static/theme.js?v={{.AssetV}}"></script>
+  <link rel="stylesheet" href="/static/app.css?v={{.AssetV}}">
+  <script src="/static/htmx.min.js?v={{.AssetV}}" defer></script>
+  <script src="/static/app.js?v={{.AssetV}}" defer></script>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col">
+{{if .Session}}
+  <header class="bg-slate-900 text-slate-100 sticky top-0 z-20 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-4 sm:gap-6">
+      <a href="/" class="font-semibold tracking-tight flex items-center gap-2 shrink-0">
+        <img src="/static/logo.svg?v={{.AssetV}}" alt="" class="h-7 w-7"> wgroster
+      </a>
+      <nav class="flex items-center gap-1 text-sm -mx-1 overflow-x-auto">
+        <a href="/" class="rounded-md px-2.5 py-1 whitespace-nowrap {{if eq .Active "dashboard"}}bg-white/10 text-white font-medium{{else}}text-slate-300 hover:text-white hover:bg-white/5{{end}}">My machines</a>
+        {{if .Session.Admin}}
+        <a href="/admin/machines" class="rounded-md px-2.5 py-1 whitespace-nowrap {{if eq .Active "machines"}}bg-white/10 text-white font-medium{{else}}text-slate-300 hover:text-white hover:bg-white/5{{end}}">Machines</a>
+        <a href="/admin/endpoints" class="rounded-md px-2.5 py-1 whitespace-nowrap {{if eq .Active "endpoints"}}bg-white/10 text-white font-medium{{else}}text-slate-300 hover:text-white hover:bg-white/5{{end}}">Endpoints</a>
+        <a href="/admin/status" class="rounded-md px-2.5 py-1 whitespace-nowrap {{if eq .Active "status"}}bg-white/10 text-white font-medium{{else}}text-slate-300 hover:text-white hover:bg-white/5{{end}}">Status</a>
+        <a href="/admin/audit" class="rounded-md px-2.5 py-1 whitespace-nowrap {{if eq .Active "audit"}}bg-white/10 text-white font-medium{{else}}text-slate-300 hover:text-white hover:bg-white/5{{end}}">Audit</a>
+        {{end}}
+      </nav>
+
+      <details data-menu class="relative ml-auto">
+        <summary class="flex items-center gap-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden select-none text-slate-200 hover:text-white">
+          <span class="h-7 w-7 rounded-full bg-emerald-600 text-white grid place-items-center text-xs font-semibold">{{initial .Session.Display}}</span>
+          <span class="hidden sm:block max-w-[12rem] truncate">{{.Session.Display}}</span>
+          {{if .Session.Admin}}<span class="text-xs bg-emerald-600 text-white rounded px-1.5 py-0.5">admin</span>{{end}}
+          <svg class="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7.5 10 12.5 15 7.5"/></svg>
+        </summary>
+        <div class="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg text-slate-700 dark:text-slate-200 py-2 z-30">
+          <div class="px-3 py-1.5">
+            <div class="text-xs font-medium text-slate-400 dark:text-slate-500 mb-1.5">Theme</div>
+            <div class="grid grid-cols-3 gap-1">
+              <button type="button" data-theme="system" class="theme-btn rounded-md px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">System</button>
+              <button type="button" data-theme="light" class="theme-btn rounded-md px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Light</button>
+              <button type="button" data-theme="dark" class="theme-btn rounded-md px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Dark</button>
+            </div>
+          </div>
+          {{if .Session.Local}}
+          <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+          <button type="button" data-dialog="change-password" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Change password</button>
+          {{end}}
+          <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+          <form method="post" action="/logout">
+            <input type="hidden" name="csrf" value="{{.Session.CSRF}}">
+            <button class="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Sign out</button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  {{if .Session.Local}}
+  <dialog id="change-password" class="rounded-2xl p-0 w-[92vw] max-w-md shadow-xl backdrop:bg-slate-900/40 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+    <form method="post" action="/account/password">
+      <input type="hidden" name="csrf" value="{{.Session.CSRF}}">
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="font-semibold text-slate-900 dark:text-slate-100">Change password</h3>
+        <button type="button" data-close class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <div class="p-6 space-y-4">
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Current password
+          <input name="current_password" type="password" autocomplete="current-password" required
+                 class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">New password
+          <input name="new_password" type="password" autocomplete="new-password" required minlength="8"
+                 class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Confirm new password
+          <input name="confirm_password" type="password" autocomplete="new-password" required minlength="8"
+                 class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <p class="text-xs text-slate-400 dark:text-slate-500">At least 8 characters.</p>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+        <button type="button" data-close class="rounded-lg px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+        <button class="rounded-lg px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium">Change password</button>
+      </div>
+    </form>
+  </dialog>
+  {{end}}
+
+  <dialog id="confirm-dialog" class="rounded-2xl p-0 w-[92vw] max-w-sm shadow-xl backdrop:bg-slate-900/40 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+    <div class="p-6">
+      <p id="confirm-message" class="text-sm text-slate-700 dark:text-slate-200"></p>
+    </div>
+    <div class="px-6 pb-4 flex justify-end gap-2">
+      <button type="button" data-close class="rounded-lg px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+      <button type="button" data-confirm-ok class="rounded-lg px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium">Confirm</button>
+    </div>
+  </dialog>
+{{end}}
+  <main class="max-w-6xl w-full mx-auto px-4 py-8 flex-1">
+    {{if .Flash}}<div class="mb-4 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-4 py-3 text-sm">{{.Flash}}</div>{{end}}
+    {{if .Error}}<div class="mb-4 rounded-lg border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 px-4 py-3 text-sm">{{.Error}}</div>{{end}}
+    {{template "content" .}}
+  </main>
+  <footer class="text-center text-xs text-slate-400 dark:text-slate-500 py-6">wgroster</footer>
+</body>
+</html>{{end}}

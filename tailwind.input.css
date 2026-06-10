@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Smooth interactive transitions across the UI. */
+  a,
+  button,
+  summary,
+  [role="button"] {
+    transition: color 0.15s ease, background-color 0.15s ease,
+      border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+
+  /* Consistent keyboard focus ring (inputs keep their own focus:ring). */
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  [data-dialog]:focus-visible {
+    outline: 2px solid #10b981; /* emerald-500 */
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background-color: rgba(16, 185, 129, 0.25);
+  }
+}

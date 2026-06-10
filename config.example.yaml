@@ -1,0 +1,92 @@
+# wgroster configuration example.
+
+# HTTP listen address.
+listen: ":8080"
+
+# Externally reachable base URL (used in the curl snippets shown to admins).
+base_url: "https://wgroster.example.com"
+
+# Secret used to sign session cookies. Generate with: openssl rand -hex 32
+# May also be provided via the WG_SESSION_KEY environment variable.
+# If left empty an ephemeral key is generated (sessions reset on restart).
+session_key: ""
+
+# Set to true when served behind HTTPS so cookies get the Secure flag (also
+# enables HSTS).
+cookie_secure: true
+
+# Session lifetime, sliding (extended on each request). Go duration syntax:
+# "12h", "30m", "168h" (= 7 days). Default 12h.
+session_ttl: "12h"
+
+# Absolute session lifetime cap: a session is rejected once it is older than
+# this, no matter how often it is refreshed. Must be >= session_ttl. This bounds
+# how long a stolen-and-kept-alive cookie can remain valid. Default 168h (7d).
+session_max_lifetime: "168h"
+
+# Enable ONLY when behind a reverse proxy that sets/overwrites X-Forwarded-For,
+# so the real client IP is used for logs and login rate-limiting.
+trusted_proxy: false
+
+# Path to the SQLite database file.
+database: "/data/wgroster.db"
+
+# Global client address pool. Each machine gets one unique IP from this range.
+vpn_cidr: "10.0.0.0/16"
+
+# Optional bearer token protecting the Prometheus /metrics endpoint. When set,
+# /metrics accepts this token. When empty, /metrics still requires an
+# authenticated admin session (it is never exposed anonymously).
+metrics_token: ""
+
+# Optional webhook: receives a JSON POST when an endpoint goes stale or a drift
+# (missing / unexpected / mismatch) appears or clears. Leave empty to disable.
+alert_webhook_url: ""
+
+# Optional offline MaxMind GeoLite2 database (Country or City). When set, the
+# peer drawer shows the country (and city, if a City DB) of the remote IP,
+# looked up locally — no external call. Optionally an ASN DB for the network.
+# geoip_db: "/data/GeoLite2-Country.mmdb"
+# geoip_asn_db: "/data/GeoLite2-ASN.mmdb"
+
+# Optional built-in administrator account, checked before LDAP. Useful to
+# bootstrap the portal or to run it without LDAP (e.g. for testing). Leave the
+# whole block out for a pure-LDAP setup.
+# local_admin:
+#   username: "admin"
+#   # Recommended: bcrypt hash, generated with "wgroster -hash-password".
+#   password_hash: "$2a$10$replace_me_with_a_real_bcrypt_hash"
+#   # Development convenience only (ignored when password_hash is set):
+#   # password: "changeme"
+
+# Self-enrollment (mobile "scan-once"): a logged-in user names a device, the
+# browser generates the keys, an IP is reserved immediately and a complete
+# config/QR is shown. The machine stays pending until an admin approves it.
+self_enroll: false
+# Endpoint (by name) self-enrolled devices connect to (required if self_enroll).
+self_enroll_endpoint: ""
+# Cap pending machines per user (0 = unlimited) and auto-expire stale pending
+# machines after N days, freeing their reserved IP (0 = never).
+max_pending_per_user: 0
+pending_expiry_days: 0
+
+# LDAP is optional when local_admin is configured.
+ldap:
+  # OpenLDAP server URL.
+  url: "ldap://ldap.example.com:389"
+  # Pattern used to build the user DN from the login. %s is the username.
+  bind_dn_pattern: "uid=%s,ou=people,dc=example,dc=com"
+  # Group whose members are administrators.
+  admin_group_dn: "cn=vpn-admins,ou=groups,dc=example,dc=com"
+  # Attribute listing group members: "memberUid" (value=uid) or "member" (value=DN).
+  member_attr: "memberUid"
+  # Attribute holding the user's display name (default "cn"; AD often "displayName").
+  name_attr: "cn"
+  # Optional service account to read group membership. If empty, the user's own
+  # authenticated connection is reused.
+  search_bind_dn: ""
+  search_bind_password: ""
+  # Upgrade a plain ldap:// connection to TLS.
+  start_tls: false
+  # Disable TLS certificate verification (testing only).
+  insecure_skip_verify: false

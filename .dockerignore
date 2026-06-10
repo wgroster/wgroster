@@ -1,0 +1,23 @@
+# Keep the build context small and free of secrets/local state.
+.git
+.gitignore
+.dockerignore
+.DS_Store
+
+# Secrets and runtime state must never enter an image layer.
+config.yaml
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Local build artifacts.
+/wgroster
+/wgroster-*
+/seed
+
+# Docs and tooling not needed to build the binary.
+docs/
+scripts/
+tools/
+README.md

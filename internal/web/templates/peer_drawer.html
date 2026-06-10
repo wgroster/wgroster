@@ -1,0 +1,84 @@
+{{define "peer_drawer"}}
+<div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-start gap-3 sticky top-0 bg-white dark:bg-slate-900">
+  <div class="min-w-0 flex-1">
+    <div class="flex items-center gap-2">
+      <span class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{.Name}}</span>
+      {{if eq .State "online"}}<span class="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">online</span>
+      {{else if eq .State "offline"}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">offline</span>
+      {{else if eq .State "missing"}}<span class="text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5">missing on hub</span>
+      {{else if eq .State "extra"}}<span class="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5">unexpected</span>{{end}}
+    </div>
+    <div class="text-sm text-slate-500 dark:text-slate-400">{{if .Owner}}{{.Owner}} · {{end}}{{.EndpointName}}</div>
+  </div>
+  <button type="button" data-close class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">&times;</button>
+</div>
+
+<div class="p-5 space-y-6 text-sm">
+  <!-- Traffic -->
+  <section>
+    <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Traffic</h4>
+    <div class="space-y-3">
+      <div>
+        <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400"><span>↓ download</span><span class="font-mono">{{humanBytes .RxRate}}/s · {{humanBytes .RX}} total</span></div>
+        <div class="text-emerald-500">{{if .RxSpark}}{{sparkline .RxSpark}}{{else}}<span class="text-xs text-slate-400 dark:text-slate-500">not enough history yet</span>{{end}}</div>
+      </div>
+      <div>
+        <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400"><span>↑ upload</span><span class="font-mono">{{humanBytes .TxRate}}/s · {{humanBytes .TX}} total</span></div>
+        <div class="text-sky-500">{{if .TxSpark}}{{sparkline .TxSpark}}{{end}}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Identity & drift -->
+  <section>
+    <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Identity</h4>
+    <dl class="space-y-1">
+      <div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Address</dt><dd class="font-mono">{{if .Address}}{{.Address}}{{else}}—{{end}}</dd></div>
+      {{if .Endpoints}}<div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Endpoints</dt><dd>{{range $i, $n := .Endpoints}}{{if $i}}, {{end}}{{$n}}{{end}}</dd></div>{{end}}
+      {{if .HubAllowedIPs}}<div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">AllowedIPs (hub)</dt><dd class="font-mono {{if .AddrMismatch}}text-red-600 dark:text-red-400{{end}}">{{if .AddrMismatch}}⚠ {{end}}{{.HubAllowedIPs}}</dd></div>{{end}}
+      <div class="flex gap-2 items-center"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Public key</dt>
+        <dd class="font-mono text-xs break-all flex-1"><code id="pk">{{.PublicKey}}</code></dd>
+        <button type="button" data-copy="#pk" class="text-emerald-700 dark:text-emerald-400 hover:underline text-xs shrink-0">copy</button>
+      </div>
+      <div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Handshake</dt><dd title="{{exact .LastHandshake}}">{{since .LastHandshake}}</dd></div>
+      {{if .HasFirstSeen}}<div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">First seen</dt><dd title="{{exact .FirstSeen}}">{{ago .FirstSeen}}</dd></div>{{end}}
+    </dl>
+  </section>
+
+  <!-- Remote -->
+  <section>
+    <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Remote</h4>
+    <dl class="space-y-1">
+      <div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Endpoint</dt><dd class="font-mono">{{if .RemoteEndpoint}}{{.RemoteEndpoint}}{{else}}—{{end}}</dd></div>
+      {{if .PTR}}<div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Reverse DNS</dt><dd class="font-mono break-all">{{.PTR}}</dd></div>{{end}}
+      {{if .GeoEnabled}}
+        {{if not .Geo.Empty}}
+        <div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Location</dt><dd>{{with .Geo.City}}{{.}}, {{end}}{{.Geo.Country}}</dd></div>
+        {{if .Geo.ASN}}<div class="flex gap-2"><dt class="w-28 shrink-0 text-slate-400 dark:text-slate-500">Network</dt><dd>{{.Geo.ASN}}{{with .Geo.Org}} · {{.}}{{end}}</dd></div>{{end}}
+        {{end}}
+      {{end}}
+    </dl>
+  </section>
+
+  <!-- Recent reports -->
+  {{if .Recent}}
+  <section>
+    <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Recent reports</h4>
+    <table class="w-full text-xs">
+      <thead class="text-left text-slate-400 dark:text-slate-500">
+        <tr><th class="py-1 font-medium">When</th><th class="py-1 font-medium text-right">↓/s</th><th class="py-1 font-medium text-right">↑/s</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+        {{range .Recent}}
+        <tr>
+          <td class="py-1 text-slate-600 dark:text-slate-300" title="{{exact .TS}}">{{ago .TS}}</td>
+          <td class="py-1 text-right text-slate-600 dark:text-slate-300">{{humanBytes .RxRate}}</td>
+          <td class="py-1 text-right text-slate-600 dark:text-slate-300">{{humanBytes .TxRate}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+  {{end}}
+</div>
+{{end}}

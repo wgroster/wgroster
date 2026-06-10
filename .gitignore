@@ -1,0 +1,14 @@
+/data/
+/config.yaml
+/wgroster
+/wgroster-*
+/seed
+*.db
+*.db-wal
+*.db-shm
+
+# OS / editor cruft
+.DS_Store
+
+# Local-only security review notes
+/REPORT.md

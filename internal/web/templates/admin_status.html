@@ -1,0 +1,19 @@
+{{define "content"}}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Status</h1>
+  <div class="flex items-center gap-3">
+    <span class="text-xs text-slate-400 dark:text-slate-500">auto-refresh every 15s</span>
+    <button hx-get="/admin/status/table" hx-target="#status" hx-swap="innerHTML"
+            class="text-sm rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">↻ Refresh</button>
+  </div>
+</div>
+<div id="status" hx-get="/admin/status/table" hx-trigger="load, every 15s" hx-swap="innerHTML">
+  <p class="text-slate-400 dark:text-slate-500 text-sm">Loading…</p>
+</div>
+
+<dialog id="peer-drawer" class="m-0 ml-auto h-screen max-h-screen w-[30rem] max-w-[94vw] rounded-l-2xl shadow-2xl backdrop:bg-slate-900/40 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+  <div id="peer-drawer-body" class="h-full overflow-y-auto">
+    <p class="p-6 text-sm text-slate-400 dark:text-slate-500">Loading…</p>
+  </div>
+</dialog>
+{{end}}

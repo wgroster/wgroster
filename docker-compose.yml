@@ -1,0 +1,15 @@
+services:
+  wgroster:
+    build: .
+    image: wgroster:latest
+    restart: unless-stopped
+    ports:
+      # Bound to localhost: terminate TLS at a reverse proxy in front (and set
+      # cookie_secure: true). Change to "8080:8080" only for a trusted network.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data
+      - ./config.yaml:/config/config.yaml:ro
+    # Provide the session key out of band rather than in the config file.
+    # environment:
+    #   WG_SESSION_KEY: "change-me"

@@ -1,0 +1,162 @@
+{{define "content"}}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Machines</h1>
+  {{if .Data.TotalPending}}
+    <span class="inline-flex items-center gap-1.5 text-sm rounded-full bg-amber-100 text-amber-800 px-3 py-1">
+      <span class="h-2 w-2 rounded-full bg-amber-500"></span>{{.Data.TotalPending}} pending approval{{if gt .Data.TotalPending 1}}s{{end}}
+    </span>
+  {{end}}
+</div>
+
+<details class="group rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 overflow-hidden bg-white dark:bg-slate-900">
+  <summary class="cursor-pointer list-none px-6 py-4 flex items-center gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+    <span class="h-8 w-8 grid place-items-center rounded-lg bg-white/20 text-lg leading-none">+</span>
+    <span class="font-medium">Create a machine</span>
+    <span class="ml-auto text-white/80 text-sm group-open:hidden">register &amp; activate, no moderation</span>
+  </summary>
+  <form method="post" action="/admin/machines" class="p-6 grid sm:grid-cols-2 gap-4">
+    <input type="hidden" name="csrf" value="{{.Session.CSRF}}">
+    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Owner (LDAP uid)
+      <input name="owner_uid" required placeholder="alice" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Machine name
+      <input name="name" required placeholder="laptop" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 sm:col-span-2">Public key
+      <input name="public_key" required placeholder="abc...=" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Address (VPN IP)
+      <input name="address" required value="{{.Data.SuggestedIP}}" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    <div class="sm:col-span-2">
+      <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Endpoints</span>
+      <div class="flex flex-wrap gap-2">
+        {{range .Data.AllEndpoints}}
+        <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1 hover:bg-slate-50 cursor-pointer">
+          <input type="checkbox" name="endpoint_ids" value="{{.ID}}" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+          {{.Name}}
+        </label>
+        {{else}}
+        <span class="text-sm text-slate-400 dark:text-slate-500">No endpoint declared yet — create one first.</span>
+        {{end}}
+      </div>
+    </div>
+    <div class="sm:col-span-2">
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-5 py-2.5 shadow-sm">Create &amp; activate</button>
+    </div>
+  </form>
+</details>
+
+{{if not .Data.Groups}}
+  <p class="text-slate-500 dark:text-slate-400 text-sm">No machine registered yet.</p>
+{{else}}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <input id="m-search" type="search" placeholder="Search machine or user…"
+         class="flex-1 min-w-[12rem] rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+  <div class="flex gap-1 text-sm">
+    <button type="button" data-mfilter="all" class="rounded-lg px-3 py-1.5 bg-slate-900 text-white">All</button>
+    <button type="button" data-mfilter="pending" class="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Pending</button>
+    <button type="button" data-mfilter="online" class="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Online</button>
+    <button type="button" data-mfilter="offline" class="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Offline</button>
+  </div>
+</div>
+{{end}}
+
+<div class="space-y-6">
+{{range .Data.Groups}}
+{{$g := .}}
+<section class="m-group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+  <header class="flex items-center gap-3 px-5 py-4 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 border-b border-slate-100 dark:border-slate-800">
+    <span class="h-9 w-9 shrink-0 rounded-full bg-slate-900 text-white grid place-items-center text-sm font-semibold">{{initial $g.Name}}</span>
+    <div class="min-w-0">
+      <div class="font-medium text-slate-900 dark:text-slate-100 truncate">{{$g.Name}}{{if ne $g.Name $g.UID}} <span class="text-xs font-normal text-slate-400 dark:text-slate-500">{{$g.UID}}</span>{{end}}</div>
+      <div class="text-xs text-slate-500 dark:text-slate-400">
+        {{$g.Total}} machine{{if gt $g.Total 1}}s{{end}}
+        · <span class="text-emerald-600">{{$g.OnlineN}} online</span>
+        {{if $g.PendingN}} · <span class="text-amber-600">{{$g.PendingN}} pending</span>{{end}}
+      </div>
+    </div>
+  </header>
+
+  <div class="divide-y divide-slate-100 dark:divide-slate-800">
+  {{range $g.Machines}}
+  {{$m := .}}
+  {{$pending := eq $m.M.Status "pending"}}
+  <div class="m-item px-5 py-4 {{if $pending}}bg-amber-50/60 border-l-2 border-amber-400{{end}}"
+       data-status="{{$m.M.Status}}" data-online="{{if $m.Online}}1{{else}}0{{end}}"
+       data-haystack="{{lower $m.M.Name}} {{lower $m.M.OwnerUID}} {{lower $m.M.OwnerName}}">
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-slate-900 dark:text-slate-100">{{$m.M.Name}}</span>
+          {{if $pending}}
+            <span class="text-xs rounded-full bg-amber-200 text-amber-800 px-2 py-0.5">Pending</span>
+          {{else if $m.Online}}
+            <span class="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">● Online</span>
+          {{else}}
+            <span class="text-xs rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5">○ Offline</span>
+          {{end}}
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {{if $m.M.Address}}<span class="font-mono text-slate-700 dark:text-slate-300">{{$m.M.Address}}</span>{{else}}<em>no address</em>{{end}}
+          {{if $m.EndpointNames}} · {{range $i, $n := $m.EndpointNames}}{{if $i}}, {{end}}{{$n}}{{end}}{{end}}
+          {{if not $pending}} · <span class="cursor-help" title="{{exact $m.LastHandshake}}">last handshake {{since $m.LastHandshake}}</span>{{end}}
+        </div>
+        {{if and (not $pending) $m.M.ApprovedBy}}
+          <div class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">approved by {{$m.M.ApprovedBy}}{{if not $m.ApprovedAt.IsZero}} · {{ago $m.ApprovedAt}}{{end}}</div>
+        {{end}}
+        <div class="text-xs text-slate-400 dark:text-slate-500 font-mono mt-1 truncate">{{$m.M.PublicKey}}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" data-dialog="edit-{{$m.M.ID}}"
+                class="text-sm rounded-lg px-3 py-1.5 {{if $pending}}bg-emerald-600 hover:bg-emerald-700 text-white{{else}}bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300{{end}}">
+          {{if $pending}}Review &amp; approve{{else}}Edit{{end}}
+        </button>
+        <form method="post" action="/admin/machines/{{$m.M.ID}}/delete" data-confirm="Delete this machine?">
+          <input type="hidden" name="csrf" value="{{$.Session.CSRF}}">
+          <button class="text-sm text-red-600 hover:text-red-800 px-1">Delete</button>
+        </form>
+      </div>
+    </div>
+
+    <dialog id="edit-{{$m.M.ID}}" class="rounded-2xl p-0 w-[92vw] max-w-lg shadow-xl backdrop:bg-slate-900/40">
+      <form method="post" action="/admin/machines/{{$m.M.ID}}">
+        <input type="hidden" name="csrf" value="{{$.Session.CSRF}}">
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <h3 class="font-semibold text-slate-900 dark:text-slate-100">{{if $pending}}Approve{{else}}Edit{{end}} machine</h3>
+          <button type="button" data-close class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-2xl leading-none">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Machine name
+            <input name="name" required value="{{$m.M.Name}}"
+                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Public key
+            <input name="public_key" required value="{{$m.M.PublicKey}}"
+                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Address (VPN IP)
+            <input name="address" required value="{{if $m.M.Address}}{{$m.M.Address}}{{else}}{{$.Data.SuggestedIP}}{{end}}"
+                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+          <div>
+            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Endpoints</span>
+            <div class="flex flex-wrap gap-2">
+              {{range $.Data.AllEndpoints}}
+              <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1 hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" name="endpoint_ids" value="{{.ID}}" {{if index $m.SelectedIDs .ID}}checked{{end}}
+                       class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                {{.Name}}
+              </label>
+              {{else}}
+              <span class="text-sm text-slate-400 dark:text-slate-500">No endpoint declared yet — create one first.</span>
+              {{end}}
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+          <button type="button" data-close class="rounded-lg px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+          <button class="rounded-lg px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium">{{if $pending}}Approve &amp; activate{{else}}Save changes{{end}}</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+  {{end}}
+  </div>
+</section>
+{{end}}
+</div>
+{{end}}

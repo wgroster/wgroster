@@ -1,0 +1,15 @@
+[Unit]
+Description=wgroster agent (push status, optionally reconcile peers)
+After=network-online.target wg-quick@wg0.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Edit these to match your portal/endpoint:
+Environment=WG_PORTAL_URL=https://wgroster.example.com
+Environment=WG_ENDPOINT_ID=1
+Environment=WG_TOKEN=replace-with-upload-token
+Environment=WG_IFACE=wg0
+# Set to 1 to let this host pull the expected peers and apply them locally:
+Environment=WG_RECONCILE=0
+ExecStart=/usr/local/bin/wgroster-agent.sh
