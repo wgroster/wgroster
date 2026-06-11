@@ -25,10 +25,20 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// version is the build version, injected at release time via -ldflags
+// "-X main.version=...". It stays "dev" for local and untagged builds.
+var version = "dev"
+
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to the YAML configuration file")
 	hashPassword := flag.Bool("hash-password", false, "read a password from stdin and print its bcrypt hash, then exit")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	if *hashPassword {
 		hashPasswordFromStdin()
@@ -84,7 +94,7 @@ func main() {
 	go srv.RunSessionGC(ctx)
 
 	go func() {
-		log.Printf("wgroster listening on %s (vpn pool %s)", cfg.Listen, pool.CIDR())
+		log.Printf("wgroster %s listening on %s (vpn pool %s)", version, cfg.Listen, pool.CIDR())
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %v", err)
 		}

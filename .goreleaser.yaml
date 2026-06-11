@@ -1,0 +1,59 @@
+# GoReleaser configuration. See https://goreleaser.com.
+#
+# Release tags use a CalVer scheme (YYYY.MM.DD.HHmmss) which is not valid
+# SemVer, so the release workflow runs `goreleaser release --skip=validate`
+# and passes the tag via GORELEASER_CURRENT_TAG.
+version: 2
+
+project_name: wgroster
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: wgroster
+    main: ./cmd/wgroster
+    binary: wgroster
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - config.example.yaml
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: wgroster
+    name: wgroster
+  # The docker image is built and pushed by the same release workflow, after
+  # GoReleaser publishes the binaries.
