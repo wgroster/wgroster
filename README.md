@@ -294,3 +294,11 @@ module, so chromedp never reaches the main one) captures the pages.
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+---
+
+<p align="center">
+  <sub>Sponsored by</sub><br>
+  <a href="https://bleemeo.com"><img src="https://bleemeo.com/static/logos/bleemeo_logo.svg" alt="Bleemeo" height="40"></a>
+</p>
+
