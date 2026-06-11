@@ -186,6 +186,17 @@ systemctl enable --now wgroster-agent.timer
 - `WG_RECONCILE=1` → also **reconcile**: pull the expected peers and apply them
   locally with `wg set` (add/update/remove) so the hub matches wgroster.
 
+**Prefer the systemd timer over cron.** A failed `oneshot` run is recorded in
+the journal (`journalctl -u wgroster-agent`) and shows up in
+`systemctl --failed` — it never emails you. The agent also retries transient
+network blips (`curl --retry`), so a brief outage doesn't even count as a
+failure. If you must use cron instead, remember cron mails on *any* output: set
+`MAILTO=""` in the crontab, or route diagnostics to the journal
+(`… 2>&1 | logger -t wgroster-agent`) rather than blindly discarding them with
+`>/dev/null`. You don't need local mail to catch a silent concentrator anyway —
+wgroster alerts on it centrally via `wg_last_report_age_seconds` (see
+[Monitoring & alerting](#monitoring--alerting)).
+
 Or do it by hand (the ready-made commands and token are on the **Endpoints**
 admin page):
 

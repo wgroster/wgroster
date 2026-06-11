@@ -24,12 +24,15 @@ set -eu
 api="$WG_PORTAL_URL/api/endpoints/$WG_ENDPOINT_ID"
 auth="Authorization: Bearer $WG_TOKEN"
 
-# 1. Push current status.
-wg show "$WG_IFACE" dump | curl -fsS -H "$auth" --data-binary @- "$api/status"
+# 1. Push current status. --retry rides out short network blips so transient
+# outages don't fail the run (and, under cron, don't trigger mail).
+wg show "$WG_IFACE" dump | curl -fsS --retry 3 --retry-connrefused \
+    --retry-delay 5 --max-time 30 -H "$auth" --data-binary @- "$api/status"
 
 # 2. Optionally reconcile peers to match the portal's source of truth.
 if [ "$WG_RECONCILE" = "1" ]; then
-    expected="$(curl -fsS -H "$auth" "$api/expected-peers?format=tsv")"
+    expected="$(curl -fsS --retry 3 --retry-connrefused --retry-delay 5 \
+        --max-time 30 -H "$auth" "$api/expected-peers?format=tsv")"
 
     # Remove peers present on the hub but no longer expected.
     wg show "$WG_IFACE" peers | while read -r pub; do
