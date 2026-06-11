@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/wgroster/wgroster/internal/config"
 	"github.com/go-ldap/ldap/v3"
+	"github.com/wgroster/wgroster/internal/config"
 )
 
 // Authenticator binds users and checks admin-group membership.

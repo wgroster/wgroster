@@ -1,10 +1,12 @@
 # Build stage.
 FROM golang:1.26 AS build
+# Version baked into the binary; the release workflow passes the release tag.
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/wgroster ./cmd/wgroster
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/wgroster ./cmd/wgroster
 
 # Runtime stage.
 FROM gcr.io/distroless/static-debian12:nonroot
