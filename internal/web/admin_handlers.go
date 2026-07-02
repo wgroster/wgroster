@@ -11,6 +11,7 @@ import (
 
 	"github.com/wgroster/wgroster/internal/auth"
 	"github.com/wgroster/wgroster/internal/store"
+	"github.com/wgroster/wgroster/internal/wg"
 )
 
 // audit records an administrative action performed by the current session.
@@ -281,6 +282,7 @@ type endpointAdminView struct {
 	HasReport   bool
 	ReportFresh bool
 	LastReport  time.Time
+	Config      string // concentrator wg0.conf (interface + all assigned peers)
 }
 
 func (s *Server) handleAdminEndpoints(w http.ResponseWriter, r *http.Request) {
@@ -295,6 +297,7 @@ func (s *Server) handleAdminEndpoints(w http.ResponseWriter, r *http.Request) {
 		ev := endpointAdminView{E: e}
 		if ms, err := s.store.ActiveMachinesForEndpoint(e.ID); err == nil {
 			ev.ExpectedN = len(ms)
+			ev.Config = wg.ConcentratorConfig(e, ms)
 		}
 		if last, ok, err := s.store.LastReport(e.ID); err == nil && ok {
 			ev.HasReport = true
@@ -351,6 +354,31 @@ func (s *Server) handleUpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "endpoint.update", e.Name)
 	redirectMsg(w, r, "/admin/endpoints", "ok", "Endpoint "+e.Name+" updated")
+}
+
+// handleEndpointConfig serves the concentrator's own WireGuard configuration:
+// its [Interface] section plus a [Peer] per machine currently assigned to it.
+func (s *Server) handleEndpointConfig(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	e, err := s.store.GetEndpoint(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	machines, err := s.store.ActiveMachinesForEndpoint(e.ID)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	conf := wg.ConcentratorConfig(e, machines)
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+safeFilename(e.Name)+".conf\"")
+	w.Write([]byte(conf))
 }
 
 func (s *Server) handleRegenerateToken(w http.ResponseWriter, r *http.Request) {

@@ -33,7 +33,8 @@ concentrator).
 
 **Administration**
 - Declare VPN **endpoints** (concentrators) with their public key, `host:port`,
-  `AllowedIPs`, DNS, MTU and keepalive; each gets a rotatable **upload token**.
+  `AllowedIPs`, DNS, MTU and keepalive; each gets a rotatable **upload token**
+  and a downloadable **concentrator `wg0.conf`** (interface + all peers).
 - Approve pending machines, or **create & activate** a machine directly.
 - IP addresses from a global pool with **next-free suggestion** and uniqueness
   validation; link a machine to **one or more endpoints** (multi-site).
@@ -207,6 +208,24 @@ wg show all dump | curl -s -H "Authorization: Bearer <TOKEN>" \
 curl -s -H "Authorization: Bearer <TOKEN>" \
   "https://wgroster.example.com/api/endpoints/<ID>/expected-peers?format=wg"
 ```
+
+**Bootstrapping a new concentrator.** Every endpoint exposes a complete
+`wg0.conf` for the hub itself: an `[Interface]` section (tunnel address, listen
+port, MTU — with a `PrivateKey` placeholder you fill in, since wgroster never
+sees private keys) followed by one `[Peer]` per assigned machine. Unlike
+`expected-peers` (which returns only the peer list for ongoing reconciliation),
+this is the full file for first-time setup. It is available three ways:
+
+- **Concentrator setup** panel on the **Endpoints** admin page — shown inline,
+  copyable, and downloadable.
+- Pulled with the endpoint's upload token (no portal login), e.g. on first boot:
+
+```sh
+curl -s -H "Authorization: Bearer <TOKEN>" \
+  "https://wgroster.example.com/api/endpoints/<ID>/config" > /etc/wireguard/wg0.conf
+```
+
+Then fill in the private key and `wg-quick up wg0`.
 
 ## Monitoring & alerting
 

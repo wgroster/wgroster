@@ -128,3 +128,33 @@ func TestClientConfig(t *testing.T) {
 		t.Errorf("expected 2 peers, config:\n%s", conf)
 	}
 }
+
+func TestConcentratorConfig(t *testing.T) {
+	e := &store.Endpoint{Name: "par02", PublicKey: "HUBpubkey", HostPort: "vpn-par02.example.com:51820", TunnelIP: "10.76.0.1", MTU: 1420}
+	machines := []*store.Machine{
+		{Name: "laptop", OwnerUID: "alice", PublicKey: "LAPpubkey", Address: "10.76.1.5"},
+		{Name: "phone", OwnerUID: "bob", PublicKey: "PHOpubkey", Address: "10.76.1.6/32"},
+	}
+	conf := ConcentratorConfig(e, machines)
+
+	for _, want := range []string{
+		"[Interface]",
+		"# par02 concentrator",
+		"<CONCENTRATOR_PRIVATE_KEY>",
+		"Address = 10.76.0.1/32",
+		"ListenPort = 51820",
+		"MTU = 1420",
+		"# laptop (alice)",
+		"PublicKey = LAPpubkey",
+		"AllowedIPs = 10.76.1.5/32",
+		"# phone (bob)",
+		"AllowedIPs = 10.76.1.6/32",
+	} {
+		if !strings.Contains(conf, want) {
+			t.Errorf("config missing %q\n---\n%s", want, conf)
+		}
+	}
+	if strings.Count(conf, "[Peer]") != 2 {
+		t.Errorf("expected 2 peers, config:\n%s", conf)
+	}
+}

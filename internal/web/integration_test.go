@@ -158,6 +158,17 @@ func TestEndToEndFlow(t *testing.T) {
 		t.Errorf("expected-peers missing entry:\n%s", pw.Body)
 	}
 
+	// 8b. The concentrator can pull its own full wg0.conf with the same token.
+	r = httptest.NewRequest("GET", fmt.Sprintf("/api/endpoints/%d/config", ep.ID), nil)
+	r.Header.Set("Authorization", "Bearer "+ep.UploadToken)
+	cw := httptest.NewRecorder()
+	h.ServeHTTP(cw, r)
+	for _, want := range []string{"[Interface]", "<CONCENTRATOR_PRIVATE_KEY>", "[Peer]", mKey, "AllowedIPs = 10.0.0.5/32"} {
+		if !strings.Contains(cw.Body.String(), want) {
+			t.Errorf("endpoint config missing %q:\n%s", want, cw.Body)
+		}
+	}
+
 	// 9. A wrong token is rejected. The response is 404 (identical to an unknown
 	// endpoint id) so endpoint ids cannot be enumerated by status code.
 	r = httptest.NewRequest("GET", fmt.Sprintf("/api/endpoints/%d/expected-peers", ep.ID), nil)

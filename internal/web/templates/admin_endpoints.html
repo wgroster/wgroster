@@ -107,6 +107,18 @@
           <pre id="peers-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
   "{{$.Data.BaseURL}}/api/endpoints/{{$e.ID}}/expected-peers?format=wg"</pre>
         </div>
+        <div>
+          <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Fetch full config (wg0.conf)</span>
+            <button type="button" data-copy="#pull-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button></div>
+          <pre id="pull-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
+  "{{$.Data.BaseURL}}/api/endpoints/{{$e.ID}}/config" > /etc/wireguard/wg0.conf</pre>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Concentrator config (wg0.conf)</span>
+            <button type="button" data-copy="#conf-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button>
+            <a href="/admin/endpoints/{{$e.ID}}/config" download class="text-emerald-700 hover:underline">download</a></div>
+          <pre id="conf-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">{{$ev.Config}}</pre>
+        </div>
       </div>
     </details>
     <form method="post" action="/admin/endpoints/{{$e.ID}}/delete" data-confirm="Delete endpoint {{$e.Name}}?">

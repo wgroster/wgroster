@@ -122,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin/endpoints", s.admin(s.handleAdminEndpoints))
 	mux.HandleFunc("POST /admin/endpoints", s.admin(s.handleCreateEndpoint))
 	mux.HandleFunc("POST /admin/endpoints/{id}", s.admin(s.handleUpdateEndpoint))
+	mux.HandleFunc("GET /admin/endpoints/{id}/config", s.admin(s.handleEndpointConfig))
 	mux.HandleFunc("POST /admin/endpoints/{id}/regenerate-token", s.admin(s.handleRegenerateToken))
 	mux.HandleFunc("POST /admin/endpoints/{id}/delete", s.admin(s.handleDeleteEndpoint))
 	mux.HandleFunc("GET /admin/status", s.admin(s.handleAdminStatus))
@@ -132,6 +133,7 @@ func (s *Server) Handler() http.Handler {
 	// Machine-to-machine API (bearer token per endpoint).
 	mux.HandleFunc("POST /api/endpoints/{id}/status", s.handleStatusUpload)
 	mux.HandleFunc("GET /api/endpoints/{id}/expected-peers", s.handleExpectedPeers)
+	mux.HandleFunc("GET /api/endpoints/{id}/config", s.handleEndpointConfigAPI)
 
 	// Monitoring.
 	mux.HandleFunc("GET /metrics", s.handleMetrics)

@@ -139,6 +139,24 @@ func (s *Server) handleExpectedPeers(w http.ResponseWriter, r *http.Request) {
 	}{e.Name, peers})
 }
 
+// handleEndpointConfigAPI returns the concentrator's own wg0.conf (interface +
+// one peer per assigned machine), authenticated with the endpoint's upload
+// token — the same credential used for status uploads and expected-peers. This
+// lets a concentrator fetch its full config on first boot without a portal login.
+func (s *Server) handleEndpointConfigAPI(w http.ResponseWriter, r *http.Request) {
+	e, ok := s.authEndpoint(w, r)
+	if !ok {
+		return
+	}
+	machines, err := s.store.ActiveMachinesForEndpoint(e.ID)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write([]byte(wg.ConcentratorConfig(e, machines)))
+}
+
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if after, found := strings.CutPrefix(h, "Bearer "); found {
