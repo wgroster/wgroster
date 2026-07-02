@@ -100,6 +100,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
   target TEXT NOT NULL DEFAULT ''
 );
 
+-- Cached directory profile (display name + photo) per user uid, populated from
+-- LDAP at login and, when a service account is configured, lazily refreshed for
+-- other users shown on the admin machines list.
+CREATE TABLE IF NOT EXISTS user_profile (
+  uid          TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL DEFAULT '',
+  photo        BLOB,
+  photo_type   TEXT NOT NULL DEFAULT '',
+  fetched_at   INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS status_history (
   endpoint_id INTEGER NOT NULL REFERENCES endpoint(id) ON DELETE CASCADE,
   public_key  TEXT NOT NULL,

@@ -110,6 +110,10 @@ type LDAP struct {
 	// NameAttr is the attribute holding the user's display name (default "cn";
 	// Active Directory often uses "displayName").
 	NameAttr string `yaml:"name_attr"`
+	// PhotoAttr is the binary attribute holding the user's photo/mugshot
+	// (default "jpegPhoto"; Active Directory often uses "thumbnailPhoto"). Empty
+	// disables photo lookups.
+	PhotoAttr string `yaml:"photo_attr"`
 	// SearchBindDN / SearchBindPassword is an optional service account used to
 	// read group membership. If empty, the user's own connection is used.
 	SearchBindDN       string `yaml:"search_bind_dn"`
@@ -130,6 +134,7 @@ func Load(path string) (*Config, error) {
 		VPNCIDR:  "10.0.0.0/16",
 		LDAP: LDAP{
 			MemberAttr: "memberUid",
+			PhotoAttr:  "jpegPhoto",
 		},
 	}
 

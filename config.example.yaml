@@ -82,8 +82,14 @@ ldap:
   member_attr: "memberUid"
   # Attribute holding the user's display name (default "cn"; AD often "displayName").
   name_attr: "cn"
-  # Optional service account to read group membership. If empty, the user's own
-  # authenticated connection is reused.
+  # Binary attribute holding the user's photo/mugshot (default "jpegPhoto"; AD
+  # often "thumbnailPhoto"). Leave empty to disable avatars.
+  photo_attr: "jpegPhoto"
+  # Optional service account to read group membership and to resolve the name
+  # and photo of users who have not logged in yet (shown on the admin machines
+  # list). If empty, the user's own connection is reused for their own lookups,
+  # and directory lookups for other users are attempted anonymously — set this
+  # only if your directory rejects anonymous reads.
   search_bind_dn: ""
   search_bind_password: ""
   # Upgrade a plain ldap:// connection to TLS.

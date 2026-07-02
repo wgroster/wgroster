@@ -56,7 +56,10 @@ concentrator).
   log**.
 
 **Auth & accounts**
-- OpenLDAP (admin via group membership, display name from `cn`).
+- OpenLDAP (admin via group membership, display name from `cn`, and avatar from
+  `jpegPhoto` when present — shown in the navbar and on the admin machines list;
+  names and photos of users who never logged in are resolved too, via the
+  `search_bind_dn` service account or anonymously when the directory allows it).
 - Optional **local admin** (bcrypt) to bootstrap or run without LDAP, with
   self-service password change.
 - HMAC-signed session cookies, CSRF protection, login rate-limiting.
@@ -131,7 +134,8 @@ internal/
 Copy `config.example.yaml` to `config.yaml` and adjust it. Key fields:
 
 - `vpn_cidr` — global client address pool (e.g. `10.0.0.0/16`).
-- `ldap.*` — OpenLDAP URL, bind DN pattern, admin group, name attribute.
+- `ldap.*` — OpenLDAP URL, bind DN pattern, admin group, name attribute, photo
+  attribute (`photo_attr`, default `jpegPhoto`), optional service account.
 - `session_key` — secret for signing cookies (`openssl rand -hex 32`), or the
   `WG_SESSION_KEY` environment variable.
 - `local_admin` (optional) — built-in admin, checked before LDAP. LDAP becomes

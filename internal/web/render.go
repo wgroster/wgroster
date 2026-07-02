@@ -156,6 +156,7 @@ type pageData struct {
 	Error      string
 	AssetV     string // asset version for cache-busting /static URLs
 	SelfEnroll bool   // whether self-enrollment is enabled
+	HasPhoto   bool   // the logged-in user has a cached avatar (/avatar/{uid})
 	Data       any
 }
 
@@ -165,14 +166,22 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page, title, act
 		http.Error(w, "unknown page", http.StatusInternalServerError)
 		return
 	}
+	sess := sessionFrom(r)
+	hasPhoto := false
+	if sess != nil {
+		if _, hp, _, _, err := s.store.UserProfileMeta(sess.UID); err == nil {
+			hasPhoto = hp
+		}
+	}
 	pd := pageData{
 		Title:      title,
 		Active:     active,
-		Session:    sessionFrom(r),
+		Session:    sess,
 		Flash:      r.URL.Query().Get("ok"),
 		Error:      r.URL.Query().Get("err"),
 		AssetV:     s.assetVersion,
 		SelfEnroll: s.cfg.SelfEnroll,
+		HasPhoto:   hasPhoto,
 		Data:       data,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

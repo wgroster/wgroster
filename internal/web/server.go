@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"sync"
 
 	"github.com/wgroster/wgroster/internal/auth"
 	"github.com/wgroster/wgroster/internal/config"
@@ -34,6 +35,9 @@ type Server struct {
 	loginLimiter *limiter // per source IP
 	userLimiter  *limiter // per submitted username
 	assetVersion string   // content hash for cache-busting /static URLs
+
+	profileMu       sync.Mutex      // guards profileInflight
+	profileInflight map[string]bool // uids being refreshed from LDAP right now
 }
 
 // New builds a Server and parses the embedded templates.
@@ -42,15 +46,16 @@ func New(cfg *config.Config, st *store.Store, a *ldap.Authenticator, pool *ipam.
 		return nil, err
 	}
 	return &Server{
-		cfg:          cfg,
-		store:        st,
-		auth:         a,
-		sess:         auth.NewManager(st, cfg.SessionKey, cfg.CookieSecure, cfg.SessionTTL, cfg.SessionMaxLifetime),
-		pool:         pool,
-		geo:          geo,
-		loginLimiter: newLimiter(10, 5), // burst 10, refill 5 per minute, per IP
-		userLimiter:  newLimiter(10, 5), // burst 10, refill 5 per minute, per username
-		assetVersion: staticVersion(),
+		cfg:             cfg,
+		store:           st,
+		auth:            a,
+		sess:            auth.NewManager(st, cfg.SessionKey, cfg.CookieSecure, cfg.SessionTTL, cfg.SessionMaxLifetime),
+		pool:            pool,
+		geo:             geo,
+		loginLimiter:    newLimiter(10, 5), // burst 10, refill 5 per minute, per IP
+		userLimiter:     newLimiter(10, 5), // burst 10, refill 5 per minute, per username
+		assetVersion:    staticVersion(),
+		profileInflight: map[string]bool{},
 	}, nil
 }
 
@@ -113,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /machines/{id}", s.user(s.handleEditMachine))
 	mux.HandleFunc("GET /machines/{id}/config", s.user(s.handleMachineConfig))
 	mux.HandleFunc("POST /machines/{id}/delete", s.user(s.handleDeleteMachine))
+	mux.HandleFunc("GET /avatar/{uid}", s.user(s.handleAvatar))
 
 	// Admin area.
 	mux.HandleFunc("GET /admin/machines", s.admin(s.handleAdminMachines))

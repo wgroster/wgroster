@@ -43,25 +43,29 @@ func (a *Authenticator) dial() (*ldap.Conn, error) {
 	return conn, nil
 }
 
+// ErrProfileUnavailable is returned by LookupProfile when the directory cannot
+// be queried at all (LDAP not configured).
+var ErrProfileUnavailable = fmt.Errorf("ldap not configured")
+
 // Authenticate verifies the user's credentials and returns the user's display
-// name (cn) and whether the user is an administrator. The uid is the login
-// typed on the form.
-func (a *Authenticator) Authenticate(uid, password string) (name string, isAdmin bool, err error) {
+// name (cn), photo (may be nil) and whether the user is an administrator. The
+// uid is the login typed on the form.
+func (a *Authenticator) Authenticate(uid, password string) (name string, photo []byte, isAdmin bool, err error) {
 	if password == "" {
-		return "", false, ErrInvalidCredentials
+		return "", nil, false, ErrInvalidCredentials
 	}
 	conn, err := a.dial()
 	if err != nil {
-		return "", false, err
+		return "", nil, false, err
 	}
 	defer conn.Close()
 
 	userDN := fmt.Sprintf(a.cfg.BindDNPattern, ldap.EscapeDN(uid))
 	if err := conn.Bind(userDN, password); err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials) {
-			return "", false, ErrInvalidCredentials
+			return "", nil, false, ErrInvalidCredentials
 		}
-		return "", false, fmt.Errorf("ldap bind: %w", err)
+		return "", nil, false, fmt.Errorf("ldap bind: %w", err)
 	}
 
 	// Connection used for lookups: a service account when configured, otherwise
@@ -70,40 +74,83 @@ func (a *Authenticator) Authenticate(uid, password string) (name string, isAdmin
 	if a.cfg.SearchBindDN != "" {
 		sc, err := a.dial()
 		if err != nil {
-			return "", false, err
+			return "", nil, false, err
 		}
 		defer sc.Close()
 		if err := sc.Bind(a.cfg.SearchBindDN, a.cfg.SearchBindPassword); err != nil {
-			return "", false, fmt.Errorf("ldap search bind: %w", err)
+			return "", nil, false, fmt.Errorf("ldap search bind: %w", err)
 		}
 		search = sc
 	}
 
-	name = a.lookupName(search, userDN)
+	name, photo = a.lookupProfile(search, userDN)
 	if a.cfg.AdminGroupDN != "" {
 		isAdmin, err = a.isMember(search, uid, userDN)
 		if err != nil {
-			return "", false, err
+			return "", nil, false, err
 		}
 	}
-	return name, isAdmin, nil
+	return name, photo, isAdmin, nil
 }
 
-// lookupName reads the user's display-name attribute (cn by default).
-func (a *Authenticator) lookupName(conn *ldap.Conn, userDN string) string {
-	attr := a.cfg.NameAttr
-	if attr == "" {
-		attr = "cn"
+// ProfileLookupEnabled reports whether the directory can be queried for
+// arbitrary users. This is possible whenever LDAP is configured: a service
+// account is used when set, otherwise the query is attempted anonymously (many
+// directories allow anonymous reads of name/photo). Without LDAP, only a user's
+// own profile can be read — at their own login.
+func (a *Authenticator) ProfileLookupEnabled() bool {
+	return a.cfg.Configured()
+}
+
+// LookupProfile resolves the display name and photo of an arbitrary user by
+// uid. It binds with the configured service account when set, and otherwise
+// queries anonymously. It is meant to populate directory data (e.g. on the
+// admin machines list) for users who never logged in.
+func (a *Authenticator) LookupProfile(uid string) (name string, photo []byte, err error) {
+	if !a.cfg.Configured() {
+		return "", nil, ErrProfileUnavailable
+	}
+	conn, err := a.dial()
+	if err != nil {
+		return "", nil, err
+	}
+	defer conn.Close()
+	// Bind as the service account when configured; otherwise stay unauthenticated
+	// (anonymous) and rely on the directory allowing anonymous reads.
+	if a.cfg.SearchBindDN != "" {
+		if err := conn.Bind(a.cfg.SearchBindDN, a.cfg.SearchBindPassword); err != nil {
+			return "", nil, fmt.Errorf("ldap search bind: %w", err)
+		}
+	}
+	userDN := fmt.Sprintf(a.cfg.BindDNPattern, ldap.EscapeDN(uid))
+	name, photo = a.lookupProfile(conn, userDN)
+	return name, photo, nil
+}
+
+// lookupProfile reads the user's display-name (cn by default) and photo
+// (jpegPhoto by default) attributes with a base-scoped search on the user DN.
+func (a *Authenticator) lookupProfile(conn *ldap.Conn, userDN string) (name string, photo []byte) {
+	nameAttr := a.cfg.NameAttr
+	if nameAttr == "" {
+		nameAttr = "cn"
+	}
+	attrs := []string{nameAttr}
+	if a.cfg.PhotoAttr != "" {
+		attrs = append(attrs, a.cfg.PhotoAttr)
 	}
 	req := ldap.NewSearchRequest(
 		userDN, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 0, false,
-		"(objectClass=*)", []string{attr}, nil,
+		"(objectClass=*)", attrs, nil,
 	)
 	res, err := conn.Search(req)
 	if err != nil || len(res.Entries) == 0 {
-		return ""
+		return "", nil
 	}
-	return res.Entries[0].GetAttributeValue(attr)
+	name = res.Entries[0].GetAttributeValue(nameAttr)
+	if a.cfg.PhotoAttr != "" {
+		photo = res.Entries[0].GetRawAttributeValue(a.cfg.PhotoAttr)
+	}
+	return name, photo
 }
 
 // isMember checks membership of the admin group on the given connection.

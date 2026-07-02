@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -588,5 +589,41 @@ func TestCSRFRequired(t *testing.T) {
 	w := do(t, h, "POST", "/machines", cookies, url.Values{"name": {"x"}, "public_key": {key(1)}})
 	if w.Code != http.StatusForbidden {
 		t.Errorf("missing CSRF: got %d, want 403", w.Code)
+	}
+}
+
+func TestAvatar(t *testing.T) {
+	srv, h, cookies, _ := testServer(t) // admin session, uid "admin"
+
+	// No cached photo yet → 404 (template falls back to the initial badge).
+	if w := do(t, h, "GET", "/avatar/admin", cookies, nil); w.Code != http.StatusNotFound {
+		t.Fatalf("avatar without photo: got %d, want 404", w.Code)
+	}
+
+	// Cache a photo for the admin, then the navbar avatar is served with its type.
+	png := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4}
+	if err := srv.store.UpsertUserProfile("admin", "Admin User", png, "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	w := do(t, h, "GET", "/avatar/admin", cookies, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("avatar: got %d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "image/png" {
+		t.Errorf("content-type = %q, want image/png", ct)
+	}
+	if !bytes.Equal(w.Body.Bytes(), png) {
+		t.Errorf("avatar body mismatch")
+	}
+
+	// A cached photo makes the navbar render an <img> instead of the initial.
+	if d := do(t, h, "GET", "/", cookies, nil); !strings.Contains(d.Body.String(), `src="/avatar/admin"`) {
+		t.Errorf("dashboard navbar missing avatar img:\n%s", d.Body)
+	}
+
+	// Fetching another user's avatar is 404 for a non-admin; admin may fetch any
+	// (here it is simply absent → 404).
+	if w := do(t, h, "GET", "/avatar/someoneelse", cookies, nil); w.Code != http.StatusNotFound {
+		t.Errorf("absent other-user avatar: got %d, want 404", w.Code)
 	}
 }

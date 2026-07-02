@@ -49,6 +49,7 @@ type adminMachineView struct {
 type userGroup struct {
 	UID      string
 	Name     string // display name (cn), falls back to uid
+	HasPhoto bool   // a directory photo is cached (served at /avatar/{uid})
 	Machines []adminMachineView
 	Total    int
 	OnlineN  int
@@ -143,9 +144,22 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 			}
 			return a.M.Name < b.M.Name
 		})
+		// Enrich the group header with the cached directory profile: prefer the
+		// LDAP display name over the per-machine cached name, and flag a photo so
+		// the template shows the avatar instead of an initial badge.
+		if name, hasPhoto, _, found, err := s.store.UserProfileMeta(uid); err == nil && found {
+			if name != "" {
+				g.Name = name
+			}
+			g.HasPhoto = hasPhoto
+		}
 		totalPending += g.PendingN
 		groups = append(groups, g)
 	}
+
+	// Lazily refresh stale/missing profiles in the background (no-op without an
+	// LDAP service account); photos and names appear on a subsequent load.
+	s.refreshProfilesAsync(order)
 
 	s.render(w, r, "admin_machines", "Machines", "machines", struct {
 		Groups       []*userGroup

@@ -3,7 +3,6 @@ package web
 import (
 	"crypto/subtle"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 
@@ -64,7 +63,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name, admin, err := s.auth.Authenticate(uid, password)
+	name, photo, admin, err := s.auth.Authenticate(uid, password)
 	if err != nil {
 		if errors.Is(err, ldap.ErrInvalidCredentials) {
 			http.Redirect(w, r, "/login?err=Invalid+credentials", http.StatusSeeOther)
@@ -74,12 +73,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Keep the cached owner name on this user's machines fresh (and backfill).
-	if name != "" {
-		if err := s.store.UpdateOwnerName(uid, name); err != nil {
-			log.Printf("update owner name for %q: %v", uid, err)
-		}
-	}
+	// Cache the directory profile (name + photo) and keep the cached owner name
+	// on this user's machines fresh (and backfill older rows).
+	s.cacheProfile(uid, name, photo)
 
 	if _, err := s.sess.Issue(w, uid, name, admin, false); err != nil {
 		http.Error(w, "session error", http.StatusInternalServerError)

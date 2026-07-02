@@ -31,7 +31,11 @@
 
       <details data-menu class="relative ml-auto">
         <summary class="flex items-center gap-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden select-none text-slate-200 hover:text-white">
-          <span class="h-7 w-7 rounded-full bg-emerald-600 text-white grid place-items-center text-xs font-semibold">{{initial .Session.Display}}</span>
+          {{if .HasPhoto}}
+            <img src="/avatar/{{.Session.UID}}" alt="" class="h-7 w-7 rounded-full object-cover bg-emerald-600">
+          {{else}}
+            <span class="h-7 w-7 rounded-full bg-emerald-600 text-white grid place-items-center text-xs font-semibold">{{initial .Session.Display}}</span>
+          {{end}}
           <span class="hidden sm:block max-w-[12rem] truncate">{{.Session.Display}}</span>
           {{if .Session.Admin}}<span class="text-xs bg-emerald-600 text-white rounded px-1.5 py-0.5">admin</span>{{end}}
           <svg class="h-4 w-4 opacity-70" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7.5 10 12.5 15 7.5"/></svg>
