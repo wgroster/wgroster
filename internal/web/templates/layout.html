@@ -69,7 +69,7 @@
       <input type="hidden" name="csrf" value="{{.Session.CSRF}}">
       <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
         <h3 class="font-semibold text-slate-900 dark:text-slate-100">Change password</h3>
-        <button type="button" data-close class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">&times;</button>
+        <button type="button" data-close aria-label="Close" class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">&times;</button>
       </div>
       <div class="p-6 space-y-4">
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Current password
@@ -102,8 +102,8 @@
   </dialog>
 {{end}}
   <main class="max-w-6xl w-full mx-auto px-4 py-8 flex-1">
-    {{if .Flash}}<div class="mb-4 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-4 py-3 text-sm">{{.Flash}}</div>{{end}}
-    {{if .Error}}<div class="mb-4 rounded-lg border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 px-4 py-3 text-sm">{{.Error}}</div>{{end}}
+    {{if .Flash}}<div data-flash class="relative mb-4 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-4 py-3 pr-10 text-sm">{{.Flash}}<button type="button" data-flash-close aria-label="Dismiss" class="absolute top-2 right-2 text-lg leading-none opacity-60 hover:opacity-100">&times;</button></div>{{end}}
+    {{if .Error}}<div data-flash class="relative mb-4 rounded-lg border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 px-4 py-3 pr-10 text-sm">{{.Error}}<button type="button" data-flash-close aria-label="Dismiss" class="absolute top-2 right-2 text-lg leading-none opacity-60 hover:opacity-100">&times;</button></div>{{end}}
     {{template "content" .}}
   </main>
   <footer class="text-center text-xs text-slate-400 dark:text-slate-500 py-6">wgroster</footer>

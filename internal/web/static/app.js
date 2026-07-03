@@ -61,7 +61,7 @@
     // Clicking the backdrop of a <dialog> closes it (target is the dialog itself).
     if (e.target.tagName === "DIALOG") { e.target.close(); return; }
 
-    var t = e.target.closest ? e.target.closest("[data-copy],[data-action],[data-dialog],[data-close],[data-theme],[data-confirm-ok]") : null;
+    var t = e.target.closest ? e.target.closest("[data-copy],[data-action],[data-dialog],[data-close],[data-flash-close],[data-theme],[data-confirm-ok]") : null;
     if (!t) return;
 
     if (t.hasAttribute("data-confirm-ok")) {
@@ -86,6 +86,11 @@
     if (t.hasAttribute("data-close")) {
       var open = t.closest("dialog");
       if (open) open.close();
+      return;
+    }
+    if (t.hasAttribute("data-flash-close")) {
+      var fl = t.closest("[data-flash]");
+      if (fl) dismissFlash(fl);
       return;
     }
 
@@ -214,6 +219,34 @@
 
   markTheme();
 
+  // Flash/error banners: fade out on dismiss, auto-hide after a few seconds, and
+  // strip the ok/err query params so a reload does not re-show a stale message.
+  function dismissFlash(el) {
+    el.style.transition = "opacity .3s";
+    el.style.opacity = "0";
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+  }
+
+  function cleanFlashURL() {
+    if (!window.history || !window.history.replaceState) return;
+    var u = new URL(window.location.href);
+    if (!u.searchParams.has("ok") && !u.searchParams.has("err")) return;
+    u.searchParams.delete("ok");
+    u.searchParams.delete("err");
+    window.history.replaceState({}, "", u.pathname + u.search + u.hash);
+  }
+
+  function initFlash() {
+    var flashes = document.querySelectorAll("[data-flash]");
+    if (!flashes.length) return;
+    cleanFlashURL();
+    flashes.forEach(function (el) {
+      setTimeout(function () { dismissFlash(el); }, 6000);
+    });
+  }
+
+  initFlash();
+
   // Generic client-side filtering: a search input plus optional status chips.
   // Items carry data-haystack/data-status/data-online; groups (data-group)
   // collapse when they hold no visible item.
@@ -221,10 +254,12 @@
     var items = document.querySelectorAll(itemSel);
     if (!items.length) return;
     var search = document.getElementById(searchId);
+    var emptyEl = document.getElementById(searchId + "-empty");
     var filter = "all";
 
     function apply() {
       var q = (search && search.value || "").trim().toLowerCase();
+      var visibleCount = 0;
       items.forEach(function (el) {
         var hay = el.getAttribute("data-haystack") || "";
         var st = el.getAttribute("data-status");
@@ -234,8 +269,11 @@
           (filter === "pending" && st === "pending") ||
           (filter === "online" && on) ||
           (filter === "offline" && st === "active" && !on);
-        el.style.display = okText && okFilter ? "" : "none";
+        var show = okText && okFilter;
+        el.style.display = show ? "" : "none";
+        if (show) visibleCount++;
       });
+      if (emptyEl) emptyEl.classList.toggle("hidden", visibleCount > 0);
       if (groupSel) {
         document.querySelectorAll(groupSel).forEach(function (g) {
           var visible = Array.prototype.some.call(g.querySelectorAll(itemSel), function (el) {

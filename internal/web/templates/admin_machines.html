@@ -56,6 +56,7 @@
     <button type="button" data-mfilter="offline" class="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Offline</button>
   </div>
 </div>
+<p id="m-search-empty" class="hidden text-sm text-slate-500 dark:text-slate-400 py-6 text-center">No machine matches your search or filter.</p>
 {{end}}
 
 <div class="space-y-6">
@@ -124,7 +125,7 @@
         <input type="hidden" name="csrf" value="{{$.Session.CSRF}}">
         <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <h3 class="font-semibold text-slate-900 dark:text-slate-100">{{if $pending}}Approve{{else}}Edit{{end}} machine</h3>
-          <button type="button" data-close class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-2xl leading-none">&times;</button>
+          <button type="button" data-close aria-label="Close" class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-2xl leading-none">&times;</button>
         </div>
         <div class="p-6 space-y-4">
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Machine name
