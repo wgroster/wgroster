@@ -1,6 +1,8 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"strings"
@@ -107,8 +109,17 @@ func (s *Server) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	if photoType == "" {
 		photoType = "image/jpeg"
 	}
-	w.Header().Set("Content-Type", photoType)
+	// Content-derived ETag so an unchanged photo returns 304 instead of the full
+	// body on the next poll/reload.
+	sum := sha256.Sum256(photo)
+	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+	w.Header().Set("ETag", etag)
 	// Private: a directory photo is per-user; do not let shared caches store it.
 	w.Header().Set("Cache-Control", "private, max-age=300")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", photoType)
 	w.Write(photo)
 }

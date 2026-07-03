@@ -83,7 +83,8 @@ func (a *Authenticator) Authenticate(uid, password string) (name string, photo [
 		search = sc
 	}
 
-	name, photo = a.lookupProfile(search, userDN)
+	// A failed profile read must not fail the login; treat name/photo as best-effort.
+	name, photo, _ = a.lookupProfile(search, userDN)
 	if a.cfg.AdminGroupDN != "" {
 		isAdmin, err = a.isMember(search, uid, userDN)
 		if err != nil {
@@ -123,13 +124,16 @@ func (a *Authenticator) LookupProfile(uid string) (name string, photo []byte, er
 		}
 	}
 	userDN := fmt.Sprintf(a.cfg.BindDNPattern, ldap.EscapeDN(uid))
-	name, photo = a.lookupProfile(conn, userDN)
-	return name, photo, nil
+	return a.lookupProfile(conn, userDN)
 }
 
 // lookupProfile reads the user's display-name (cn by default) and photo
 // (jpegPhoto by default) attributes with a base-scoped search on the user DN.
-func (a *Authenticator) lookupProfile(conn *ldap.Conn, userDN string) (name string, photo []byte) {
+// A search transport error is returned so callers can avoid caching an empty
+// profile after a transient failure; a genuinely absent entry or attribute is
+// not an error (empty name/photo, nil error) so it can be cached as "known
+// empty" without re-querying on every page load.
+func (a *Authenticator) lookupProfile(conn *ldap.Conn, userDN string) (name string, photo []byte, err error) {
 	nameAttr := a.cfg.NameAttr
 	if nameAttr == "" {
 		nameAttr = "cn"
@@ -143,14 +147,17 @@ func (a *Authenticator) lookupProfile(conn *ldap.Conn, userDN string) (name stri
 		"(objectClass=*)", attrs, nil,
 	)
 	res, err := conn.Search(req)
-	if err != nil || len(res.Entries) == 0 {
-		return "", nil
+	if err != nil {
+		return "", nil, err
+	}
+	if len(res.Entries) == 0 {
+		return "", nil, nil
 	}
 	name = res.Entries[0].GetAttributeValue(nameAttr)
 	if a.cfg.PhotoAttr != "" {
 		photo = res.Entries[0].GetRawAttributeValue(a.cfg.PhotoAttr)
 	}
-	return name, photo
+	return name, photo, nil
 }
 
 // isMember checks membership of the admin group on the given connection.

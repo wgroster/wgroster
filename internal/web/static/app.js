@@ -239,8 +239,15 @@
   });
 
   // Escape closes open dropdown menus (native <dialog> already handles Escape).
+  // "/" focuses the page's search box (unless already typing in a field).
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") closeMenus();
+    if (e.key === "Escape") { closeMenus(); return; }
+    if (e.key === "/") {
+      var tag = (e.target && e.target.tagName) || "";
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+      var box = document.getElementById("m-search") || document.getElementById("e-search");
+      if (box) { e.preventDefault(); box.focus(); }
+    }
   });
 
   markTheme();
