@@ -12,6 +12,34 @@
     setTimeout(function () { btn.textContent = old; }, 1200);
   }
 
+  // copyText copies to the clipboard, using the async Clipboard API in a secure
+  // context and falling back to a hidden-textarea execCommand otherwise (the
+  // Clipboard API is unavailable over plain HTTP, e.g. in development).
+  function copyText(text, btn) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(
+        function () { flash(btn, "copied!"); },
+        function () { fallbackCopy(text, btn); }
+      );
+      return;
+    }
+    fallbackCopy(text, btn);
+  }
+
+  function fallbackCopy(text, btn) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    flash(btn, ok ? "copied!" : "copy failed");
+  }
+
   // buildConfig returns the configuration with the placeholder replaced by the
   // private key typed in the (browser-only) field, or null if not available.
   function buildConfig() {
@@ -96,9 +124,7 @@
 
     if (t.hasAttribute("data-copy")) {
       var el = document.querySelector(t.getAttribute("data-copy"));
-      if (el && navigator.clipboard) {
-        navigator.clipboard.writeText(el.textContent).then(function () { flash(t, "copied!"); });
-      }
+      if (el) copyText(el.textContent, t);
       return;
     }
 

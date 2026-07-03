@@ -37,12 +37,13 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 // ---- Machines administration ------------------------------------------------
 
 type adminMachineView struct {
-	M             *store.Machine
-	EndpointNames []string
-	SelectedIDs   map[int64]bool
-	Online        bool
-	LastHandshake time.Time
-	ApprovedAt    time.Time
+	M                 *store.Machine
+	EndpointNames     []string
+	SelectedIDs       map[int64]bool
+	PrimaryEndpointID int64 // first linked endpoint, for the live-status drawer link
+	Online            bool
+	LastHandshake     time.Time
+	ApprovedAt        time.Time
 }
 
 // userGroup gathers one user's machines for the admin view.
@@ -77,15 +78,19 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		}
 		selected := make(map[int64]bool, len(ids))
 		var names []string
+		var primaryEID int64
 		for _, id := range ids {
 			selected[id] = true
 		}
 		for _, e := range endpoints {
 			if selected[e.ID] {
 				names = append(names, e.Name)
+				if primaryEID == 0 {
+					primaryEID = e.ID
+				}
 			}
 		}
-		mv := adminMachineView{M: m, EndpointNames: names, SelectedIDs: selected}
+		mv := adminMachineView{M: m, EndpointNames: names, SelectedIDs: selected, PrimaryEndpointID: primaryEID}
 		if m.ApprovedAt != nil {
 			mv.ApprovedAt = *m.ApprovedAt
 		}

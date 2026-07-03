@@ -109,6 +109,12 @@
         <div class="text-xs text-slate-400 dark:text-slate-500 font-mono mt-1 truncate">{{$m.M.PublicKey}}</div>
       </div>
       <div class="flex items-center gap-2">
+        {{if and (not $pending) $m.PrimaryEndpointID}}
+        <button type="button" title="Live status" aria-label="Live status"
+                hx-get="/admin/peer?endpoint={{$m.PrimaryEndpointID}}&key={{urlquery $m.M.PublicKey}}"
+                hx-target="#peer-drawer-body" data-dialog="peer-drawer"
+                class="text-sm rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">Status</button>
+        {{end}}
         <button type="button" data-dialog="edit-{{$m.M.ID}}"
                 class="text-sm rounded-lg px-3 py-1.5 {{if $pending}}bg-emerald-600 hover:bg-emerald-700 text-white{{else}}bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300{{end}}">
           {{if $pending}}Review &amp; approve{{else}}Edit{{end}}
@@ -164,4 +170,10 @@
 </section>
 {{end}}
 </div>
+
+<dialog id="peer-drawer" class="m-0 ml-auto h-screen max-h-screen w-[30rem] max-w-[94vw] rounded-l-2xl shadow-2xl backdrop:bg-slate-900/40 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+  <div id="peer-drawer-body" class="h-full overflow-y-auto">
+    <p class="p-6 text-sm text-slate-400 dark:text-slate-500">Loading…</p>
+  </div>
+</dialog>
 {{end}}
