@@ -59,7 +59,8 @@
 <p id="m-search-empty" class="hidden text-sm text-slate-500 dark:text-slate-400 py-6 text-center">No machine matches your search or filter.</p>
 {{end}}
 
-<div class="space-y-6">
+<div id="m-list" class="space-y-6" data-poll
+     hx-get="/admin/machines" hx-trigger="every 20s" hx-select="#m-list" hx-target="#m-list" hx-swap="outerHTML">
 {{range .Data.Groups}}
 {{$g := .}}
 <section class="m-group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">

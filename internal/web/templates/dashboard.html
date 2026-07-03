@@ -81,6 +81,8 @@
 <script src="/static/nacl.min.js?v={{.AssetV}}" defer></script>
 {{if .SelfEnroll}}<script src="/static/qrcode.min.js?v={{.AssetV}}" defer></script>{{end}}
 
+<div id="dash-list" data-poll
+     hx-get="/" hx-trigger="every 20s" hx-select="#dash-list" hx-target="#dash-list" hx-swap="outerHTML">
 {{if not .Data}}
   <div class="text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 py-12">
     <div class="text-3xl text-slate-300 mb-2">⌗</div>
@@ -145,4 +147,5 @@
   {{end}}
 </div>
 {{end}}
+</div>
 {{end}}

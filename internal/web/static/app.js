@@ -273,17 +273,35 @@
 
   initFlash();
 
+  // Poll gating: an auto-refreshing (hx-trigger="every …") element marked
+  // data-poll must not swap while the user is mid-edit (a dialog is open) or
+  // typing in a field — that would close the modal or drop focus. Cancelling the
+  // request leaves htmx's timer running, so the next tick refreshes normally.
+  function pollBlocked() {
+    if (document.querySelector("dialog[open]")) return true;
+    var a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  document.body.addEventListener("htmx:beforeRequest", function (e) {
+    var el = e.detail && e.detail.elt;
+    if (el && el.hasAttribute && el.hasAttribute("data-poll") && pollBlocked()) {
+      e.preventDefault();
+    }
+  });
+
   // Generic client-side filtering: a search input plus optional status chips.
   // Items carry data-haystack/data-status/data-online; groups (data-group)
-  // collapse when they hold no visible item.
+  // collapse when they hold no visible item. Items are re-queried on each apply
+  // so the filter survives an htmx poll swap that replaces the list.
+  var filterAppliers = [];
   function initFilter(searchId, chipAttr, itemSel, groupSel) {
-    var items = document.querySelectorAll(itemSel);
-    if (!items.length) return;
     var search = document.getElementById(searchId);
     var emptyEl = document.getElementById(searchId + "-empty");
+    if (!search && !document.querySelector(itemSel)) return;
     var filter = "all";
 
     function apply() {
+      var items = document.querySelectorAll(itemSel);
       var q = (search && search.value || "").trim().toLowerCase();
       var visibleCount = 0;
       items.forEach(function (el) {
@@ -324,8 +342,16 @@
       });
     });
     apply();
+    filterAppliers.push(apply);
   }
 
   initFilter("m-search", "data-mfilter", ".m-item", ".m-group");
   initFilter("e-search", "data-efilter", ".e-item", null);
+
+  // After a poll swap replaces a list, re-apply the active search/filter so the
+  // freshly rendered items honour it (the search box and chips live outside the
+  // swapped region, so their state persists).
+  document.body.addEventListener("htmx:afterSwap", function () {
+    filterAppliers.forEach(function (fn) { fn(); });
+  });
 })();
