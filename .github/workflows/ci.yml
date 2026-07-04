@@ -1,7 +1,7 @@
 name: CI
 
-# Build, vet, format-check and test on every push to main and every pull
-# request. This is the gate before a release is cut from the UI.
+# Build, vet, format-check, test and vulnerability-scan on every push to main
+# and every pull request. This is the gate before a release is cut from the UI.
 
 on:
   push:
@@ -40,3 +40,8 @@ jobs:
 
       - name: Test
         run: go test -race ./...
+
+      - name: Vulnerability check
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
