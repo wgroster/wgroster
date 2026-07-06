@@ -35,13 +35,15 @@ type Server struct {
 	loginLimiter *limiter // per source IP
 	userLimiter  *limiter // per submitted username
 	assetVersion string   // content hash for cache-busting /static URLs
+	version      string   // build version ("dev" for local/untagged builds)
 
 	profileMu       sync.Mutex      // guards profileInflight
 	profileInflight map[string]bool // uids being refreshed from LDAP right now
 }
 
-// New builds a Server and parses the embedded templates.
-func New(cfg *config.Config, st *store.Store, a *ldap.Authenticator, pool *ipam.Pool, geo *geoip.Lookup) (*Server, error) {
+// New builds a Server and parses the embedded templates. version is the build
+// version stamp (e.g. a release tag), or "dev" for local/untagged builds.
+func New(cfg *config.Config, st *store.Store, a *ldap.Authenticator, pool *ipam.Pool, geo *geoip.Lookup, version string) (*Server, error) {
 	if err := loadTemplates(); err != nil {
 		return nil, err
 	}
@@ -55,6 +57,7 @@ func New(cfg *config.Config, st *store.Store, a *ldap.Authenticator, pool *ipam.
 		loginLimiter:    newLimiter(10, 5), // burst 10, refill 5 per minute, per IP
 		userLimiter:     newLimiter(10, 5), // burst 10, refill 5 per minute, per username
 		assetVersion:    staticVersion(),
+		version:         version,
 		profileInflight: map[string]bool{},
 	}, nil
 }

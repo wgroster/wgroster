@@ -157,6 +157,7 @@ type pageData struct {
 	AssetV     string // asset version for cache-busting /static URLs
 	SelfEnroll bool   // whether self-enrollment is enabled
 	HasPhoto   bool   // the logged-in user has a cached avatar (/avatar/{uid})
+	Version    string // release version shown in the footer (empty for dev builds)
 	Data       any
 }
 
@@ -173,6 +174,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page, title, act
 			hasPhoto = hp
 		}
 	}
+	// Show the version in the footer only for a real release build.
+	version := s.version
+	if version == "dev" {
+		version = ""
+	}
 	pd := pageData{
 		Title:      title,
 		Active:     active,
@@ -182,6 +188,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page, title, act
 		AssetV:     s.assetVersion,
 		SelfEnroll: s.cfg.SelfEnroll,
 		HasPhoto:   hasPhoto,
+		Version:    version,
 		Data:       data,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

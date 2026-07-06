@@ -106,6 +106,6 @@
     {{if .Error}}<div data-flash class="relative mb-4 rounded-lg border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 px-4 py-3 pr-10 text-sm">{{.Error}}<button type="button" data-flash-close aria-label="Dismiss" class="absolute top-2 right-2 text-lg leading-none opacity-60 hover:opacity-100">&times;</button></div>{{end}}
     {{template "content" .}}
   </main>
-  <footer class="text-center text-xs text-slate-400 dark:text-slate-500 py-6">wgroster</footer>
+  <footer class="text-center text-xs text-slate-400 dark:text-slate-500 py-6">wgroster{{if .Version}} · <span class="font-mono">{{.Version}}</span>{{end}}</footer>
 </body>
 </html>{{end}}

@@ -67,7 +67,7 @@ func main() {
 	}
 	defer geo.Close()
 
-	srv, err := web.New(cfg, st, ldap.New(cfg.LDAP), pool, geo)
+	srv, err := web.New(cfg, st, ldap.New(cfg.LDAP), pool, geo, version)
 	if err != nil {
 		log.Fatalf("web: %v", err)
 	}

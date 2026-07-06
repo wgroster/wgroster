@@ -39,7 +39,7 @@ func testServer(t *testing.T) (*Server, http.Handler, []*http.Cookie, string) {
 
 	cfg := &config.Config{SessionKey: "0123456789abcdef0123456789abcdef", VPNCIDR: "10.0.0.0/16", BaseURL: "http://x"}
 	pool, _ := ipam.New(cfg.VPNCIDR)
-	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil)
+	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestLocalAdminLogin(t *testing.T) {
 			defer st.Close()
 			cfg := &config.Config{SessionKey: "0123456789abcdef0123456789abcdef", VPNCIDR: "10.0.0.0/16", LocalAdmin: c.la}
 			pool, _ := ipam.New(cfg.VPNCIDR)
-			srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil)
+			srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil, "dev")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -313,7 +313,7 @@ func TestMetricsTokenProtection(t *testing.T) {
 	defer st.Close()
 	cfg := &config.Config{SessionKey: "0123456789abcdef0123456789abcdef", VPNCIDR: "10.0.0.0/16", MetricsToken: "s3cret"}
 	pool, _ := ipam.New(cfg.VPNCIDR)
-	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil)
+	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestChangePassword(t *testing.T) {
 		LocalAdmin: config.LocalAdmin{Username: "admin", PasswordHash: string(hash)},
 	}
 	pool, _ := ipam.New(cfg.VPNCIDR)
-	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil)
+	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +439,7 @@ func TestAlertsWebhook(t *testing.T) {
 	defer st.Close()
 	cfg := &config.Config{SessionKey: "0123456789abcdef0123456789abcdef", VPNCIDR: "10.0.0.0/16", AlertWebhookURL: ws.URL}
 	pool, _ := ipam.New(cfg.VPNCIDR)
-	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil)
+	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,7 +529,7 @@ func TestSelfEnroll(t *testing.T) {
 		SelfEnroll: true, SelfEnrollEndpoint: "paris", MaxPendingPerUser: 1,
 	}
 	pool, _ := ipam.New(cfg.VPNCIDR)
-	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil)
+	srv, err := New(cfg, st, ldap.New(cfg.LDAP), pool, nil, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
