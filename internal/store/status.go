@@ -15,14 +15,53 @@ func (s *Store) ReplaceStatus(endpointID int64, peers []StatusPeer, receivedAt t
 	}
 	defer tx.Rollback()
 
+	// Preserve the last known handshake and remote endpoint across WireGuard
+	// restarts: a fresh `wg show` reports handshake 0 and an empty endpoint until
+	// the peer re-handshakes, which would otherwise wipe good data. Keep the
+	// previous values until a newer report supersedes them. A handshake is a
+	// wall-clock timestamp that only moves forward, so max() is safe; a stale
+	// preserved handshake still ages past the online threshold on its own.
+	type prevPeer struct {
+		handshake int64
+		remote    string
+	}
+	prev := map[string]prevPeer{}
+	rows, err := tx.Query(`SELECT public_key, last_handshake, remote_endpoint FROM status_peer WHERE endpoint_id=?`, endpointID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var k, remote string
+		var hs int64
+		if err := rows.Scan(&k, &hs, &remote); err != nil {
+			rows.Close()
+			return err
+		}
+		prev[k] = prevPeer{handshake: hs, remote: remote}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
 	if _, err := tx.Exec(`DELETE FROM status_peer WHERE endpoint_id=?`, endpointID); err != nil {
 		return err
 	}
 	for _, p := range peers {
+		handshake := p.LastHandshake.Unix()
+		remote := p.RemoteEndpoint
+		if old, ok := prev[p.PublicKey]; ok {
+			if old.handshake > handshake {
+				handshake = old.handshake // keep last known across a wg restart
+			}
+			if remote == "" {
+				remote = old.remote // hub reports no endpoint until re-handshake
+			}
+		}
 		if _, err := tx.Exec(`
 			INSERT INTO status_peer (endpoint_id, public_key, last_handshake, rx, tx, remote_endpoint, allowed_ips)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			endpointID, p.PublicKey, p.LastHandshake.Unix(), p.RX, p.TX, p.RemoteEndpoint, p.AllowedIPs); err != nil {
+			endpointID, p.PublicKey, handshake, p.RX, p.TX, remote, p.AllowedIPs); err != nil {
 			return err
 		}
 	}
