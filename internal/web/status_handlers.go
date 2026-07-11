@@ -120,6 +120,7 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 				ps.Name = m.Name
 				ps.Owner = m.OwnerDisplay()
 				ps.Address = m.Address
+				ps.AddrMismatch = m.Address != "" && p.AllowedIPs != "" && !allowedCovers(p.AllowedIPs, m.Address)
 			}
 			es.Peers = append(es.Peers, ps)
 			es.Extra++

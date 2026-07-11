@@ -67,9 +67,11 @@
           {{if .Owner}}<span class="text-slate-400 dark:text-slate-500 text-xs ml-1">{{.Owner}}</span>{{end}}
         </td>
         <td class="px-5 py-2.5 font-mono text-xs">
-          {{if .Address}}<span class="text-slate-700 dark:text-slate-300">{{.Address}}</span>
-            {{if .AddrMismatch}}<span class="text-red-600 ml-1" title="The hub announces AllowedIPs that do not cover this address">⚠ hub: {{.HubAllowedIPs}}</span>{{end}}
-          {{else if .HubAllowedIPs}}<span class="text-slate-600 dark:text-slate-300">{{.HubAllowedIPs}}</span>
+          {{if .HubAllowedIPs}}
+            {{if .AddrMismatch}}<span class="text-red-600 dark:text-red-400 cursor-help" title="Hub announces {{.HubAllowedIPs}}; portal expects {{.Address}}">⚠ {{.HubAllowedIPs}}</span>
+              <span class="text-slate-400 dark:text-slate-500 ml-1">≠ {{.Address}}</span>
+            {{else}}<span class="text-slate-700 dark:text-slate-300">{{.HubAllowedIPs}}</span>{{end}}
+          {{else if .Address}}<span class="text-slate-400 dark:text-slate-500 cursor-help" title="Portal-assigned address; not reported by the hub">{{.Address}}</span>
           {{else}}<span class="text-slate-400 dark:text-slate-500">—</span>{{end}}
         </td>
         <td class="px-5 py-2.5">
