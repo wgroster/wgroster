@@ -34,7 +34,7 @@
     No WireGuard CLI handy?
     <button type="button" data-action="genkey" class="text-emerald-700 hover:underline font-medium">Generate a keypair in your browser</button>
   </div>
-  <div id="keypair-out" class="hidden mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+  <div id="keypair-out" role="status" tabindex="-1" class="hidden mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
     <p class="text-amber-800 text-sm mb-2">⚠ Save this private key now — it is shown only here and is never sent to the server.</p>
     <div class="flex items-center gap-2">
       <span class="text-xs text-slate-500 dark:text-slate-400">Private key</span>
@@ -61,8 +61,8 @@
     <button type="button" data-action="enroll" data-csrf="{{.Session.CSRF}}"
             class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-4 py-2">Generate &amp; show QR</button>
   </div>
-  <p id="enroll-msg" class="text-sm text-red-600 mt-2 hidden"></p>
-  <div id="enroll-result" class="hidden mt-4 flex flex-wrap gap-4 items-start">
+  <p id="enroll-msg" role="alert" class="text-sm text-red-600 mt-2 hidden"></p>
+  <div id="enroll-result" role="status" tabindex="-1" class="hidden mt-4 flex flex-wrap gap-4 items-start">
     <div id="enroll-qr" class="inline-block p-3 bg-white rounded-lg border border-slate-200 dark:border-slate-800"></div>
     <div class="flex-1 min-w-[16rem]">
       <div class="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-3 py-2 text-sm mb-2">

@@ -7,7 +7,7 @@
             class="text-sm rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">↻ Refresh</button>
   </div>
 </div>
-<div id="status" hx-get="/admin/status/table" hx-trigger="load, every 15s" hx-swap="innerHTML">
+<div id="status" data-poll hx-get="/admin/status/table" hx-trigger="load, every 15s" hx-swap="innerHTML">
   <p class="text-slate-400 dark:text-slate-500 text-sm">Loading…</p>
 </div>
 

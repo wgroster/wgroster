@@ -10,8 +10,8 @@
     <div class="flex gap-2">
       <button type="button" data-copy="#conf"
               class="text-sm bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg px-3 py-1.5">Copy</button>
-      <a href="/machines/{{.Data.Machine.ID}}/config?download=1"
-         class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5">Download .conf</a>
+      <a href="/machines/{{.Data.Machine.ID}}/config?download=1" title="Config with a &lt;YOUR_PRIVATE_KEY&gt; placeholder you replace by hand after downloading"
+         class="text-sm bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg px-3 py-1.5">Download template</a>
     </div>
   </div>
   <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
@@ -34,10 +34,10 @@
              class="w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
     </div>
     <button type="button" data-action="qr" class="bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium rounded-lg px-4 py-2">Generate QR code</button>
-    <button type="button" data-action="download-complete" data-fname="{{.Data.Machine.Name}}"
-            class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg px-4 py-2">Download complete .conf</button>
+    <button type="button" data-action="download-complete" data-fname="{{.Data.Machine.Name}}" title="Config with your private key already filled in — built in your browser, ready to use"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg px-4 py-2">Download ready-to-use .conf</button>
   </div>
-  <p id="qrmsg" class="text-sm text-red-600 mb-2 hidden"></p>
+  <p id="qrmsg" role="alert" class="text-sm text-red-600 mb-2 hidden"></p>
   <div id="qr" class="inline-block p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800"></div>
 </div>
 

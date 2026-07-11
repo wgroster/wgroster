@@ -154,10 +154,14 @@
       var kp = nacl.box.keyPair();
       var pkInput = document.getElementById("public_key");
       if (pkInput) pkInput.value = base64(kp.publicKey);
-      var out = document.getElementById("privkey-out");
-      if (out) out.textContent = base64(kp.secretKey);
+      // Reveal the box first, then write the key into it, so the live region is
+      // rendered when its content changes (announced to screen readers). Move
+      // focus there too for keyboard users.
       var box = document.getElementById("keypair-out");
       if (box) box.classList.remove("hidden");
+      var out = document.getElementById("privkey-out");
+      if (out) out.textContent = base64(kp.secretKey);
+      if (box && box.focus) box.focus();
     } else if (action === "download-el") {
       var src = document.querySelector(t.getAttribute("data-target"));
       if (!src) return;
@@ -210,14 +214,15 @@
         "\nAllowedIPs = " + d.peer.allowed_ips + "\n";
       if (d.peer.persistent_keepalive) conf += "PersistentKeepalive = " + d.peer.persistent_keepalive + "\n";
 
+      var res = document.getElementById("enroll-result");
+      if (res) res.classList.remove("hidden");
       var pre = document.getElementById("enroll-conf");
       if (pre) pre.textContent = conf;
       var qr = document.getElementById("enroll-qr");
       if (qr && typeof QRCode !== "undefined") { qr.innerHTML = ""; new QRCode(qr, { text: conf, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L }); }
       var dl = document.querySelector('[data-action="download-el"][data-target="#enroll-conf"]');
       if (dl) dl.setAttribute("data-fname", name);
-      var res = document.getElementById("enroll-result");
-      if (res) res.classList.remove("hidden");
+      if (res && res.focus) res.focus();
     }).catch(function (e) { enrollMsg("Enrollment failed: " + e.message); });
   }
 
@@ -242,6 +247,18 @@
   // "/" focuses the page's search box (unless already typing in a field).
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") { closeMenus(); return; }
+    // Enter/Space activate a non-button element that opens a dialog (e.g. a
+    // clickable table row with tabindex+role="button"). Native buttons/links
+    // already emit a click on these keys, so exclude them to avoid firing twice.
+    if (e.key === "Enter" || e.key === " ") {
+      var act = e.target;
+      if (act && act.hasAttribute && act.hasAttribute("data-dialog") &&
+          act.tagName !== "BUTTON" && act.tagName !== "A") {
+        e.preventDefault();
+        act.click();
+      }
+      return;
+    }
     if (e.key === "/") {
       var tag = (e.target && e.target.tagName) || "";
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
@@ -284,17 +301,61 @@
   // data-poll must not swap while the user is mid-edit (a dialog is open) or
   // typing in a field — that would close the modal or drop focus. Cancelling the
   // request leaves htmx's timer running, so the next tick refreshes normally.
-  function pollBlocked() {
+  function pollBlocked(el) {
     if (document.querySelector("dialog[open]")) return true;
     var a = document.activeElement;
-    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+    // Focus is inside the region about to be swapped (e.g. a keyboard-focused
+    // table row): swapping would drop that focus, so defer to the next tick.
+    if (el && a && a !== document.body && el.contains && el.contains(a)) return true;
+    return false;
   }
   document.body.addEventListener("htmx:beforeRequest", function (e) {
     var el = e.detail && e.detail.elt;
-    if (el && el.hasAttribute && el.hasAttribute("data-poll") && pollBlocked()) {
+    if (el && el.hasAttribute && el.hasAttribute("data-poll") && pollBlocked(el)) {
       e.preventDefault();
     }
   });
+
+  // Client-side flash banner, reusing the server flash markup/behaviour so it
+  // dismisses the same way. Used to surface htmx request failures.
+  function toast(text, kind) {
+    var main = document.querySelector("main");
+    if (!main) return;
+    var box = document.createElement("div");
+    box.setAttribute("data-flash", "");
+    box.setAttribute("role", kind === "ok" ? "status" : "alert");
+    box.className = "relative mb-4 rounded-lg border px-4 py-3 pr-10 text-sm " +
+      (kind === "ok"
+        ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300"
+        : "border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300");
+    box.textContent = text;
+    var x = document.createElement("button");
+    x.type = "button";
+    x.setAttribute("data-flash-close", "");
+    x.setAttribute("aria-label", "Dismiss");
+    x.className = "absolute top-2 right-2 text-lg leading-none opacity-60 hover:opacity-100";
+    x.innerHTML = "&times;";
+    box.appendChild(x);
+    main.insertBefore(box, main.firstChild);
+    setTimeout(function () { dismissFlash(box); }, 6000);
+  }
+
+  // Global htmx failure handling: without this, a failed fetch is silent and a
+  // panel loaded via htmx (e.g. the peer drawer) stays stuck on "Loading…".
+  function onHtmxError(e) {
+    var d = e.detail || {};
+    if (d.target && d.target.id === "peer-drawer-body") {
+      d.target.innerHTML = '<p class="p-6 text-sm text-red-600 dark:text-red-400">Could not load details. Please retry.</p>';
+    }
+    // Background polls retry on their own — don't spam a toast for them.
+    var el = d.elt;
+    if (el && el.hasAttribute && el.hasAttribute("data-poll")) return;
+    toast("Something went wrong talking to the server. Please retry.", "err");
+  }
+  document.body.addEventListener("htmx:responseError", onHtmxError);
+  document.body.addEventListener("htmx:sendError", onHtmxError);
+  document.body.addEventListener("htmx:timeout", onHtmxError);
 
   // Generic client-side filtering: a search input plus optional status chips.
   // Items carry data-haystack/data-status/data-online; groups (data-group)
