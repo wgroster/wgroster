@@ -1,5 +1,5 @@
 # Build stage.
-FROM golang:1.26 AS build
+FROM golang:1.26.5 AS build
 # Version baked into the binary; the release workflow passes the release tag.
 ARG VERSION=dev
 WORKDIR /src
