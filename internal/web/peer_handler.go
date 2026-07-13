@@ -117,9 +117,15 @@ func (s *Server) handlePeerDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// First seen = earliest recorded sample (within the history retention
+	// window), not the oldest of the capped series below — otherwise it would
+	// slide with the window and read a constant "~N min ago".
+	if ts, ok, err := s.store.PeerFirstSeen(endpointID, key); err == nil && ok {
+		d.FirstSeen, d.HasFirstSeen = ts, true
+	}
+
 	// History → throughput sparklines + recent samples.
 	if samples, err := s.store.PeerSeries(endpointID, key, 60); err == nil && len(samples) > 0 {
-		d.FirstSeen, d.HasFirstSeen = samples[0].TS, true
 		for i := 1; i < len(samples); i++ {
 			dt := samples[i].TS.Unix() - samples[i-1].TS.Unix()
 			if dt <= 0 {
