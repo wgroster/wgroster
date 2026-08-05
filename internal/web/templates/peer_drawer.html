@@ -6,12 +6,68 @@
       {{if eq .State "online"}}<span class="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">online</span>
       {{else if eq .State "offline"}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">offline</span>
       {{else if eq .State "missing"}}<span class="text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5">missing on hub</span>
+      {{else if eq .State "unlinked"}}
+        {{if .Pending}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">pending approval</span>
+        {{else}}<span class="text-xs rounded-full bg-sky-100 text-sky-700 px-2 py-0.5">not linked here</span>{{end}}
       {{else if eq .State "extra"}}<span class="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5">unexpected</span>{{end}}
     </div>
     <div class="text-sm text-slate-500 dark:text-slate-400">{{if .Owner}}{{.Owner}} · {{end}}{{.EndpointName}}</div>
   </div>
   <button type="button" data-close aria-label="Close" class="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white text-2xl leading-none">&times;</button>
 </div>
+
+{{/* Drift resolution: the hub carries a peer the portal does not expect here.
+     Adopting (unknown key) or linking (known machine) is the fix, so the form
+     sits at the top of the drawer rather than below the traffic curves. */}}
+{{if eq .State "extra"}}
+<div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-purple-50 dark:bg-purple-950/30">
+  <h4 class="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Adopt this peer</h4>
+  <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+    This public key is configured on {{.EndpointName}} but unknown to the portal. Register it as a machine to
+    manage it here — the concentrator keeps its current configuration. If it should no longer have access,
+    remove it from the concentrator instead.
+  </p>
+  <form method="post" action="/admin/peers/adopt" class="mt-3 space-y-2">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="endpoint" value="{{.EndpointID}}">
+    <input type="hidden" name="key" value="{{.PublicKey}}">
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Owner (LDAP uid)
+        <input name="owner_uid" required placeholder="alice" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Machine name
+        <input name="name" required placeholder="laptop" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    </div>
+    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Address (VPN IP)
+      <input name="address" required value="{{.Suggested}}" class="mt-1 w-full font-mono rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    {{if .SuggestedIsHub}}
+      <p class="text-[11px] text-slate-500 dark:text-slate-400">Address already announced by the hub — nothing to change on the concentrator.</p>
+    {{else if .HubAllowedIPs}}
+      <p class="text-[11px] text-amber-700 dark:text-amber-500">The hub announces {{.HubAllowedIPs}}, which is unusable here (outside the pool or already taken). With another address, update the concentrator's AllowedIPs for this peer.</p>
+    {{end}}
+    <button class="w-full rounded-lg px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">Adopt &amp; activate on {{.EndpointName}}</button>
+  </form>
+</div>
+{{else if eq .State "unlinked"}}
+<div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-sky-50 dark:bg-sky-950/30">
+  <h4 class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{{if .Pending}}Approve this machine{{else}}Link to {{.EndpointName}}{{end}}</h4>
+  <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+    {{if .Pending}}This machine is registered in the portal but still awaiting approval, while the hub already
+    carries its key.{{else}}This machine is registered in the portal but not linked to {{.EndpointName}}{{if .Endpoints}} (only {{range $i, $n := .Endpoints}}{{if $i}}, {{end}}{{$n}}{{end}}){{end}}, while the hub
+    already carries its key.{{end}} Activating it here makes the portal match what is deployed.
+  </p>
+  <form method="post" action="/admin/peers/link" class="mt-3 space-y-2">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="endpoint" value="{{.EndpointID}}">
+    <input type="hidden" name="key" value="{{.PublicKey}}">
+    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Address (VPN IP)
+      <input name="address" required value="{{.Suggested}}" class="mt-1 w-full font-mono rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+    {{if and .AddrMismatch .HubAllowedIPs}}
+      <p class="text-[11px] text-amber-700 dark:text-amber-500">The hub announces {{.HubAllowedIPs}} for this key. Keep the portal address and update the concentrator, or enter the hub's address here if that is the correct one.</p>
+    {{end}}
+    <button class="w-full rounded-lg px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">{{if .Pending}}Approve &amp; link to {{.EndpointName}}{{else}}Link to {{.EndpointName}}{{end}}</button>
+  </form>
+</div>
+{{end}}
 
 <div class="p-5 space-y-6 text-sm">
   <!-- Traffic -->

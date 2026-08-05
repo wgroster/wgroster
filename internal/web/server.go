@@ -137,6 +137,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin/status", s.admin(s.handleAdminStatus))
 	mux.HandleFunc("GET /admin/status/table", s.admin(s.handleAdminStatusTable))
 	mux.HandleFunc("GET /admin/peer", s.admin(s.handlePeerDetail))
+	mux.HandleFunc("POST /admin/peers/adopt", s.admin(s.handleAdoptPeer))
+	mux.HandleFunc("POST /admin/peers/link", s.admin(s.handleLinkPeer))
 	mux.HandleFunc("GET /admin/audit", s.admin(s.handleAdminAudit))
 
 	// Machine-to-machine API (bearer token per endpoint).

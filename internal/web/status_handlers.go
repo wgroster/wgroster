@@ -12,7 +12,14 @@ const (
 	statePeerOnline  = "online"  // expected and handshaked recently
 	statePeerOffline = "offline" // expected, reported, but stale/never
 	statePeerMissing = "missing" // expected (active machine) but not reported
-	statePeerExtra   = "extra"   // reported but not an expected machine
+	// statePeerUnlinked: reported by the hub and the key is known to the portal,
+	// but the machine is not active on this endpoint (pending approval, or linked
+	// to other endpoints only). One click away from being correct.
+	statePeerUnlinked = "unlinked"
+	// statePeerExtra: reported by the hub with a public key the portal has never
+	// seen. Either a config predating the portal (adopt it) or a peer that should
+	// be removed from the concentrator.
+	statePeerExtra = "extra"
 )
 
 type peerStatus struct {
@@ -21,6 +28,7 @@ type peerStatus struct {
 	PublicKey      string
 	Address        string // address assigned by the portal
 	State          string
+	Pending        bool   // known machine still awaiting approval (unlinked only)
 	RemoteEndpoint string // remote IP:port as seen by the hub
 	HubAllowedIPs  string // allowed-ips as seen by the hub (server side)
 	AddrMismatch   bool   // hub allowed-ips does not cover the assigned address
@@ -38,6 +46,7 @@ type endpointStatus struct {
 	ReportFresh bool
 	Peers       []peerStatus
 	Missing     int
+	Unlinked    int
 	Extra       int
 	OnlineN     int
 	Series      []int64 // recent total throughput (bytes/s) for the sparkline
@@ -101,14 +110,16 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 			es.Peers = append(es.Peers, ps)
 		}
 
-		// Reported peers that are not expected (declared elsewhere or stale).
+		// Reported peers the portal does not expect here. Two very different
+		// cases, kept apart because they call for different fixes: a key the
+		// portal knows (unlinked → link/approve the machine) versus a key it has
+		// never seen (extra → adopt it or clean up the hub).
 		for _, p := range reported {
 			if expectedKeys[p.PublicKey] {
 				continue
 			}
 			ps := peerStatus{
 				PublicKey:      p.PublicKey,
-				State:          statePeerExtra,
 				RemoteEndpoint: p.RemoteEndpoint,
 				HubAllowedIPs:  p.AllowedIPs,
 				LastHandshake:  p.LastHandshake,
@@ -121,9 +132,14 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 				ps.Owner = m.OwnerDisplay()
 				ps.Address = m.Address
 				ps.AddrMismatch = m.Address != "" && p.AllowedIPs != "" && !allowedCovers(p.AllowedIPs, m.Address)
+				ps.Pending = m.Status == store.StatusPending
+				ps.State = statePeerUnlinked
+				es.Unlinked++
+			} else {
+				ps.State = statePeerExtra
+				es.Extra++
 			}
 			es.Peers = append(es.Peers, ps)
-			es.Extra++
 		}
 
 		// Per-peer throughput (rate) shown in the table; full curves live in the
@@ -148,6 +164,7 @@ type statusSummary struct {
 	ReportingN int
 	OnlineN    int
 	MissingN   int
+	UnlinkedN  int
 	ExtraN     int
 }
 
@@ -159,6 +176,7 @@ func summarize(es []endpointStatus) statusSummary {
 		}
 		sum.OnlineN += e.OnlineN
 		sum.MissingN += e.Missing
+		sum.UnlinkedN += e.Unlinked
 		sum.ExtraN += e.Extra
 	}
 	return sum

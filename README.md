@@ -42,8 +42,11 @@ concentrator).
 
 **Source of truth & drift detection**
 - Concentrators push `wg show dump`; wgroster compares it to the declared peers
-  and flags **online / offline / missing-on-hub / unexpected** and **AllowedIPs
-  mismatch**.
+  and flags **online / offline / missing-on-hub / not-linked-here / unexpected**
+  and **AllowedIPs mismatch**.
+- Resolve drift from the peer drawer in one step: **adopt** a peer whose key the
+  portal has never seen (importing a config that predates wgroster), or **link /
+  approve** a known machine the hub already carries.
 - Exposes the **expected peer list** (`wg` / `tsv` / `json`) so external tooling
   (or the bundled agent) can reconcile the servers.
 
@@ -243,7 +246,9 @@ or an admin session):
 
 - `wg_endpoints_total`, `wg_endpoints_reporting`, `wg_machines_total`,
   `wg_machines_pending`
-- `wg_peers_online|offline|missing|unexpected{endpoint="…"}`
+- `wg_peers_online|offline|missing|unlinked|unexpected{endpoint="…"}` —
+  `unlinked` counts reported peers the portal knows but has not activated on that
+  endpoint, `unexpected` those with a public key it has never seen.
 - `wg_last_report_age_seconds{endpoint="…"}` — alert when a concentrator goes
   quiet.
 
@@ -262,7 +267,8 @@ An optional **alert webhook** (`alert_webhook_url`) is POSTed on transitions:
 {"endpoint":"paris","type":"missing","status":"firing","detail":"2 peer(s) missing on hub","time":"2026-06-04T08:00:00Z"}
 ```
 
-`type`: `stale | missing | unexpected | mismatch`; `status`: `firing | resolved`.
+`type`: `stale | missing | unlinked | unexpected | mismatch`; `status`:
+`firing | resolved`.
 Every admin action is recorded on the **Audit** page (`/admin/audit`).
 
 ## Security & production checklist

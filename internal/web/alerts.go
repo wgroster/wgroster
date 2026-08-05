@@ -13,7 +13,7 @@ import (
 // alertPayload is POSTed to the configured webhook on a state transition.
 type alertPayload struct {
 	Endpoint string `json:"endpoint"`
-	Type     string `json:"type"`   // stale | missing | unexpected | mismatch
+	Type     string `json:"type"`   // stale | missing | unlinked | unexpected | mismatch
 	Status   string `json:"status"` // firing | resolved
 	Detail   string `json:"detail"`
 	Time     string `json:"time"`
@@ -55,8 +55,11 @@ func (s *Server) evalAlerts(ctx context.Context, firing map[string]string) {
 		if es.Missing > 0 {
 			add(es.E.Name, "missing", fmt.Sprintf("%d peer(s) missing on hub", es.Missing))
 		}
+		if es.Unlinked > 0 {
+			add(es.E.Name, "unlinked", fmt.Sprintf("%d peer(s) known to the portal but not active here", es.Unlinked))
+		}
 		if es.Extra > 0 {
-			add(es.E.Name, "unexpected", fmt.Sprintf("%d unexpected peer(s)", es.Extra))
+			add(es.E.Name, "unexpected", fmt.Sprintf("%d peer(s) with an unknown public key", es.Extra))
 		}
 		n := 0
 		for _, p := range es.Peers {

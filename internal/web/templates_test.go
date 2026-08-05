@@ -75,11 +75,14 @@ func TestTemplatesExecute(t *testing.T) {
 		ReportFresh: true,
 		OnlineN:     1,
 		Missing:     1,
+		Unlinked:    2,
 		Extra:       1,
 		Series:      []int64{10, 50, 30, 80, 20, 60},
 		Peers: []peerStatus{
 			{Name: "laptop", Owner: "alice", Address: "10.0.0.5", State: statePeerOnline, RemoteEndpoint: "203.0.113.5:1234", HubAllowedIPs: "10.0.0.5/32", LastHandshake: time.Now(), RX: 1024, TX: 2048, RxRate: 1500, TxRate: 800},
 			{Name: "desktop", Owner: "alice", Address: "10.0.0.6", State: statePeerOffline, HubAllowedIPs: "10.0.0.99/32", AddrMismatch: true},
+			{Name: "tablet", Owner: "bob", Address: "10.0.0.7", State: statePeerUnlinked, HubAllowedIPs: "10.0.0.7/32"},
+			{Name: "phone", Owner: "bob", State: statePeerUnlinked, Pending: true, HubAllowedIPs: "10.0.0.8/32"},
 			{Name: "(unknown)", State: statePeerExtra, RemoteEndpoint: "198.51.100.7:51820", HubAllowedIPs: "10.0.0.200/32"},
 		},
 	}}
@@ -99,5 +102,32 @@ func TestTemplatesExecute(t *testing.T) {
 	}
 	if err := partialTmpls["peer_drawer"].ExecuteTemplate(io.Discard, "peer_drawer", drawer); err != nil {
 		t.Errorf("execute peer_drawer: %v", err)
+	}
+
+	// Drift variants: each renders its own action form, so exercise them all.
+	drifts := map[string]peerDetail{
+		"extra": {
+			EndpointID: 1, EndpointName: "amsterdam", CSRF: "tok", PublicKey: "k", Name: "(unknown)",
+			State: statePeerExtra, HubAllowedIPs: "10.0.0.200/32", Suggested: "10.0.0.200", SuggestedIsHub: true,
+		},
+		"extra address outside pool": {
+			EndpointID: 1, EndpointName: "amsterdam", CSRF: "tok", PublicKey: "k", Name: "(unknown)",
+			State: statePeerExtra, HubAllowedIPs: "192.0.2.9/32", Suggested: "10.0.0.9",
+		},
+		"unlinked": {
+			EndpointID: 1, EndpointName: "amsterdam", CSRF: "tok", PublicKey: "k", Name: "laptop", Owner: "alice",
+			MachineID: 1, Address: "10.0.0.5", Endpoints: []string{"paris"}, State: statePeerUnlinked,
+			HubAllowedIPs: "10.0.0.99/32", AddrMismatch: true, Suggested: "10.0.0.5",
+		},
+		"pending": {
+			EndpointID: 1, EndpointName: "amsterdam", CSRF: "tok", PublicKey: "k", Name: "phone", Owner: "bob",
+			MachineID: 2, Pending: true, LinkedHere: true, State: statePeerUnlinked,
+			HubAllowedIPs: "10.0.0.8/32", Suggested: "10.0.0.8", SuggestedIsHub: true,
+		},
+	}
+	for name, d := range drifts {
+		if err := partialTmpls["peer_drawer"].ExecuteTemplate(io.Discard, "peer_drawer", d); err != nil {
+			t.Errorf("execute peer_drawer (%s): %v", name, err)
+		}
 	}
 }

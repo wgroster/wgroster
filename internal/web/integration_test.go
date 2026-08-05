@@ -627,3 +627,195 @@ func TestAvatar(t *testing.T) {
 		t.Errorf("absent other-user avatar: got %d, want 404", w.Code)
 	}
 }
+
+// uploadDump posts a "wg show dump" body the way an endpoint's agent would.
+func uploadDump(t *testing.T, h http.Handler, ep *store.Endpoint, dump string) {
+	t.Helper()
+	r := httptest.NewRequest("POST", fmt.Sprintf("/api/endpoints/%d/status", ep.ID), strings.NewReader(dump))
+	r.Header.Set("Authorization", "Bearer "+ep.UploadToken)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status upload: got %d (%s)", w.Code, w.Body)
+	}
+}
+
+// dumpLine renders one peer line of a wg dump with a fresh handshake.
+func dumpLine(pubKey, allowedIPs string) string {
+	return fmt.Sprintf("%s\t(none)\t203.0.113.9:1234\t%s\t%d\t10\t20\t25", pubKey, allowedIPs, time.Now().Unix())
+}
+
+func endpointByName(t *testing.T, srv *Server, name string) *store.Endpoint {
+	t.Helper()
+	eps, err := srv.store.ListEndpoints()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range eps {
+		if e.Name == name {
+			return e
+		}
+	}
+	t.Fatalf("no endpoint named %q", name)
+	return nil
+}
+
+func statusFor(t *testing.T, srv *Server, name string) endpointStatus {
+	t.Helper()
+	statuses, err := srv.buildStatus()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, es := range statuses {
+		if es.E.Name == name {
+			return es
+		}
+	}
+	t.Fatalf("no status for endpoint %q", name)
+	return endpointStatus{}
+}
+
+// TestAdoptUnexpectedPeer covers importing a config that predates the portal: a
+// hub reports a public key nobody declared, and the drawer turns it into a
+// machine in one step.
+func TestAdoptUnexpectedPeer(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+	})
+	ep := mustEndpoint(t, srv)
+
+	unknown := key(9)
+	uploadDump(t, h, ep, dumpLine(unknown, "10.0.0.42/32"))
+
+	if es := statusFor(t, srv, "paris"); es.Extra != 1 || es.Unlinked != 0 {
+		t.Fatalf("want 1 extra / 0 unlinked, got %d/%d", es.Extra, es.Unlinked)
+	}
+
+	// The drawer offers the adopt form, prefilled with the address the hub
+	// already announces (so the concentrator needs no change).
+	w := do(t, h, "GET", fmt.Sprintf("/admin/peer?endpoint=%d&key=%s", ep.ID, url.QueryEscape(unknown)), cookies, nil)
+	for _, want := range []string{"/admin/peers/adopt", `value="10.0.0.42"`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("drawer missing %q:\n%s", want, w.Body)
+		}
+	}
+
+	w = do(t, h, "POST", "/admin/peers/adopt", cookies, url.Values{
+		"csrf": {csrf}, "endpoint": {fmt.Sprint(ep.ID)}, "key": {unknown},
+		"owner_uid": {"alice"}, "name": {"legacy-laptop"}, "address": {"10.0.0.42"},
+	})
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "ok=") {
+		t.Fatalf("adopt: got %d %q (%s)", w.Code, w.Header().Get("Location"), w.Body)
+	}
+	m, err := srv.store.MachineByPublicKey(unknown)
+	if err != nil {
+		t.Fatalf("adopted machine not found: %v", err)
+	}
+	if m.Status != store.StatusActive || m.Address != "10.0.0.42" || m.OwnerUID != "alice" || m.Name != "legacy-laptop" {
+		t.Fatalf("adopted machine: %+v", m)
+	}
+	if ids, _ := srv.store.EndpointIDsForMachine(m.ID); len(ids) != 1 || ids[0] != ep.ID {
+		t.Errorf("endpoint links: %v, want [%d]", ids, ep.ID)
+	}
+
+	// The drift is resolved: the peer is now expected, and online.
+	if es := statusFor(t, srv, "paris"); es.Extra != 0 || es.OnlineN != 1 {
+		t.Errorf("after adopt: extra=%d online=%d, want 0/1", es.Extra, es.OnlineN)
+	}
+
+	// Adopting again is refused rather than creating a duplicate.
+	w = do(t, h, "POST", "/admin/peers/adopt", cookies, url.Values{
+		"csrf": {csrf}, "endpoint": {fmt.Sprint(ep.ID)}, "key": {unknown},
+		"owner_uid": {"bob"}, "name": {"dup"}, "address": {"10.0.0.43"},
+	})
+	if !strings.Contains(w.Header().Get("Location"), "err=") {
+		t.Errorf("re-adopt should be rejected, got %q", w.Header().Get("Location"))
+	}
+
+	// A key the hub never reported cannot be adopted (the routes act only on
+	// peers actually present in a report).
+	w = do(t, h, "POST", "/admin/peers/adopt", cookies, url.Values{
+		"csrf": {csrf}, "endpoint": {fmt.Sprint(ep.ID)}, "key": {key(7)},
+		"owner_uid": {"bob"}, "name": {"ghost"}, "address": {"10.0.0.44"},
+	})
+	if w.Code != http.StatusNotFound {
+		t.Errorf("adopt of an unreported key: got %d, want 404", w.Code)
+	}
+}
+
+// TestLinkUnlinkedPeer covers the other half of the drift: the hub carries a key
+// the portal knows, but the machine is not active on that endpoint.
+func TestLinkUnlinkedPeer(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	for i, name := range []string{"paris", "lyon"} {
+		do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+			"csrf": {csrf}, "name": {name}, "public_key": {key(byte(20 + i))}, "host_port": {"vpn:51820"},
+		})
+	}
+	paris, lyon := endpointByName(t, srv, "paris"), endpointByName(t, srv, "lyon")
+
+	// An active machine on paris only, which lyon's hub also carries.
+	mKey := key(1)
+	do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {mKey},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(paris.ID)},
+	})
+	uploadDump(t, h, lyon, dumpLine(mKey, "10.0.0.5/32"))
+
+	es := statusFor(t, srv, "lyon")
+	if es.Unlinked != 1 || es.Extra != 0 {
+		t.Fatalf("lyon: want 1 unlinked / 0 extra, got %d/%d", es.Unlinked, es.Extra)
+	}
+	if es.Peers[0].State != statePeerUnlinked || es.Peers[0].Pending {
+		t.Fatalf("peer state: %q pending=%v", es.Peers[0].State, es.Peers[0].Pending)
+	}
+
+	// The drawer offers to link, keeping the address already assigned.
+	w := do(t, h, "GET", fmt.Sprintf("/admin/peer?endpoint=%d&key=%s", lyon.ID, url.QueryEscape(mKey)), cookies, nil)
+	for _, want := range []string{"/admin/peers/link", `value="10.0.0.5"`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("drawer missing %q:\n%s", want, w.Body)
+		}
+	}
+
+	w = do(t, h, "POST", "/admin/peers/link", cookies, url.Values{
+		"csrf": {csrf}, "endpoint": {fmt.Sprint(lyon.ID)}, "key": {mKey}, "address": {"10.0.0.5"},
+	})
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "ok=") {
+		t.Fatalf("link: got %d %q (%s)", w.Code, w.Header().Get("Location"), w.Body)
+	}
+	m, _ := srv.store.MachineByPublicKey(mKey)
+	ids, _ := srv.store.EndpointIDsForMachine(m.ID)
+	if len(ids) != 2 || m.Address != "10.0.0.5" {
+		t.Errorf("after link: address=%q endpoints=%v, want 10.0.0.5 on both", m.Address, ids)
+	}
+	if es := statusFor(t, srv, "lyon"); es.Unlinked != 0 || es.OnlineN != 1 {
+		t.Errorf("lyon after link: unlinked=%d online=%d, want 0/1", es.Unlinked, es.OnlineN)
+	}
+
+	// Same route approves a machine still pending, which the hub already carries.
+	pKey := key(4)
+	do(t, h, "POST", "/machines", cookies, url.Values{"csrf": {csrf}, "name": {"phone"}, "public_key": {pKey}})
+	uploadDump(t, h, paris, dumpLine(pKey, "10.0.0.6/32"))
+	es = statusFor(t, srv, "paris")
+	var pending *peerStatus
+	for i := range es.Peers {
+		if es.Peers[i].PublicKey == pKey {
+			pending = &es.Peers[i]
+		}
+	}
+	if pending == nil || pending.State != statePeerUnlinked || !pending.Pending {
+		t.Fatalf("pending peer not reported as unlinked+pending: %+v", pending)
+	}
+	w = do(t, h, "POST", "/admin/peers/link", cookies, url.Values{
+		"csrf": {csrf}, "endpoint": {fmt.Sprint(paris.ID)}, "key": {pKey}, "address": {"10.0.0.6"},
+	})
+	if !strings.Contains(w.Header().Get("Location"), "ok=") {
+		t.Fatalf("approve via link: %q (%s)", w.Header().Get("Location"), w.Body)
+	}
+	pm, _ := srv.store.MachineByPublicKey(pKey)
+	if pm.Status != store.StatusActive || pm.Address != "10.0.0.6" {
+		t.Errorf("approved machine: %+v", pm)
+	}
+}

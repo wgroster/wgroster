@@ -66,7 +66,11 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	for _, es := range statuses {
 		fmt.Fprintf(&b, "wg_peers_missing{endpoint=%q} %d\n", escapeLabel(es.E.Name), es.Missing)
 	}
-	gauge("wg_peers_unexpected", "Reported peers not declared in the portal, per endpoint.")
+	gauge("wg_peers_unlinked", "Reported peers whose key is known to the portal but not active on this endpoint.")
+	for _, es := range statuses {
+		fmt.Fprintf(&b, "wg_peers_unlinked{endpoint=%q} %d\n", escapeLabel(es.E.Name), es.Unlinked)
+	}
+	gauge("wg_peers_unexpected", "Reported peers whose public key is unknown to the portal, per endpoint.")
 	for _, es := range statuses {
 		fmt.Fprintf(&b, "wg_peers_unexpected{endpoint=%q} %d\n", escapeLabel(es.E.Name), es.Extra)
 	}

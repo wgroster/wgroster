@@ -19,6 +19,7 @@
   <div class="bg-white dark:bg-slate-900 rounded-xl border {{if .ExtraN}}border-purple-200{{else}}border-slate-200 dark:border-slate-800{{end}} p-4">
     <div class="text-2xl font-semibold {{if .ExtraN}}text-purple-600{{else}}text-slate-400 dark:text-slate-500{{end}}">{{.ExtraN}}</div>
     <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">unexpected</div>
+    {{if .UnlinkedN}}<div class="text-xs text-sky-600 dark:text-sky-400 mt-0.5">+{{.UnlinkedN}} not linked here</div>{{end}}
   </div>
 </div>
 
@@ -39,6 +40,7 @@
     <div class="ml-auto flex items-center gap-2 text-xs">
       <span class="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5">{{.OnlineN}} online</span>
       {{if .Missing}}<span class="rounded-full bg-red-50 text-red-700 px-2 py-0.5">{{.Missing}} missing</span>{{end}}
+      {{if .Unlinked}}<span class="rounded-full bg-sky-50 text-sky-700 px-2 py-0.5">{{.Unlinked}} not linked</span>{{end}}
       {{if .Extra}}<span class="rounded-full bg-purple-50 text-purple-700 px-2 py-0.5">{{.Extra}} unexpected</span>{{end}}
     </div>
   </div>
@@ -78,7 +80,10 @@
           {{if eq .State "online"}}<span class="inline-flex items-center gap-1 text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>online</span>
           {{else if eq .State "offline"}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">offline</span>
           {{else if eq .State "missing"}}<span class="text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5">missing on hub</span>
-          {{else}}<span class="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5">unexpected</span>{{end}}
+          {{else if eq .State "unlinked"}}
+            {{if .Pending}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 cursor-help" title="Registered in the portal but awaiting approval — open the row to approve it">pending approval</span>
+            {{else}}<span class="text-xs rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 cursor-help" title="Registered in the portal but not linked to this endpoint — open the row to link it">not linked here</span>{{end}}
+          {{else}}<span class="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 cursor-help" title="Unknown public key — open the row to adopt this peer">unexpected</span>{{end}}
         </td>
         <td class="px-5 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-300">{{if .RemoteEndpoint}}{{.RemoteEndpoint}}{{else}}—{{end}}</td>
         <td class="px-5 py-2.5 text-slate-600 dark:text-slate-300 cursor-help" title="{{exact .LastHandshake}}">{{ago .LastHandshake}}</td>
