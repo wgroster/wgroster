@@ -4,10 +4,10 @@
 package geoip
 
 import (
-	"net"
+	"net/netip"
 	"strconv"
 
-	maxminddb "github.com/oschwald/maxminddb-golang"
+	maxminddb "github.com/oschwald/maxminddb-golang/v2"
 )
 
 // Result holds what we surface about an IP.
@@ -60,10 +60,13 @@ func (l *Lookup) Lookup(ipStr string) Result {
 	if l == nil {
 		return res
 	}
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
+	ip, err := netip.ParseAddr(ipStr)
+	if err != nil {
 		return res
 	}
+	// Fold IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) back to plain IPv4;
+	// the databases are keyed on the unmapped form.
+	ip = ip.Unmap()
 	if l.city != nil {
 		var rec struct {
 			Country struct {
@@ -73,7 +76,7 @@ func (l *Lookup) Lookup(ipStr string) Result {
 				Names map[string]string `maxminddb:"names"`
 			} `maxminddb:"city"`
 		}
-		if err := l.city.Lookup(ip, &rec); err == nil {
+		if err := l.city.Lookup(ip).Decode(&rec); err == nil {
 			res.Country = rec.Country.ISOCode
 			res.City = rec.City.Names["en"]
 		}
@@ -83,7 +86,7 @@ func (l *Lookup) Lookup(ipStr string) Result {
 			Number uint   `maxminddb:"autonomous_system_number"`
 			Org    string `maxminddb:"autonomous_system_organization"`
 		}
-		if err := l.asn.Lookup(ip, &rec); err == nil {
+		if err := l.asn.Lookup(ip).Decode(&rec); err == nil {
 			if rec.Number > 0 {
 				res.ASN = "AS" + strconv.FormatUint(uint64(rec.Number), 10)
 			}
