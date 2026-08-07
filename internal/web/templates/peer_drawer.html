@@ -33,12 +33,12 @@
     <input type="hidden" name="key" value="{{.PublicKey}}">
     <div class="grid grid-cols-2 gap-2">
       <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Owner (LDAP uid)
-        <input name="owner_uid" required placeholder="alice" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <input name="owner_uid" required placeholder="alice" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-2 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
       <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Machine name
-        <input name="name" required placeholder="laptop" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <input name="name" required placeholder="laptop" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-2 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     </div>
     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Address (VPN IP)
-      <input name="address" required value="{{.Suggested}}" class="mt-1 w-full font-mono rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <input name="address" required value="{{.Suggested}}" class="mt-1 w-full font-mono rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     {{if .SuggestedIsHub}}
       <p class="text-[11px] text-slate-500 dark:text-slate-400">Address already announced by the hub — nothing to change on the concentrator.</p>
     {{else if .HubAllowedIPs}}
@@ -60,7 +60,7 @@
     <input type="hidden" name="endpoint" value="{{.EndpointID}}">
     <input type="hidden" name="key" value="{{.PublicKey}}">
     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">Address (VPN IP)
-      <input name="address" required value="{{.Suggested}}" class="mt-1 w-full font-mono rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <input name="address" required value="{{.Suggested}}" class="mt-1 w-full font-mono rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     {{if and .AddrMismatch .HubAllowedIPs}}
       <p class="text-[11px] text-amber-700 dark:text-amber-500">The hub announces {{.HubAllowedIPs}} for this key. Keep the portal address and update the concentrator, or enter the hub's address here if that is the correct one.</p>
     {{end}}

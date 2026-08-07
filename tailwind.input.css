@@ -1,6 +1,15 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind v4 build input for wgroster.
+ * Configuration is CSS-first (no tailwind.config.js). Rebuild the embedded
+ * stylesheet after changing template classes -- see CLAUDE.md for the command.
+ *
+ * source(none) disables automatic content detection so only the templates are
+ * scanned, matching the explicit `content` glob used before v4.
+ */
+@import "tailwindcss" source(none);
+@source "./internal/web/templates/**/*.html";
+
+/* Replaces v3's `darkMode: "class"`. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   body {

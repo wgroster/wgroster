@@ -4,7 +4,7 @@
   <span class="text-xs text-slate-400 dark:text-slate-500">VPN concentrators</span>
 </div>
 
-<details class="group rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-8 overflow-hidden bg-white dark:bg-slate-900">
+<details class="group rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs mb-8 overflow-hidden bg-white dark:bg-slate-900">
   <summary class="cursor-pointer list-none px-6 py-4 flex items-center gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
     <span class="h-8 w-8 grid place-items-center rounded-lg bg-white/20 text-lg leading-none">+</span>
     <span class="font-medium">New endpoint</span>
@@ -16,17 +16,17 @@
       <legend class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Identity</legend>
       <div class="grid sm:grid-cols-2 gap-4">
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Name
-          <input name="name" required placeholder="paris" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+          <input name="name" required placeholder="paris" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Public endpoint (host:port)
-          <input name="host_port" required placeholder="vpn-par.example.com:51820" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+          <input name="host_port" required placeholder="vpn-par.example.com:51820" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
       </div>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Public key
-        <input name="public_key" required placeholder="abc...=" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <input name="public_key" required placeholder="abc...=" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     </fieldset>
     <fieldset class="space-y-4">
       <legend class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Routing &amp; options</legend>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">AllowedIPs (networks behind this endpoint)
-        <input name="allowed_ips" placeholder="10.0.0.0/8, 192.168.1.0/24" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+        <input name="allowed_ips" placeholder="10.0.0.0/8, 192.168.1.0/24" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
       <div class="grid sm:grid-cols-4 gap-4">
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">DNS
           <input name="dns" placeholder="10.0.0.1" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
@@ -38,7 +38,7 @@
           <input name="persistent_keepalive" type="number" placeholder="25" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>
       </div>
     </fieldset>
-    <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-5 py-2.5 shadow-sm">Create endpoint</button>
+    <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-5 py-2.5 shadow-xs">Create endpoint</button>
   </form>
 </details>
 
@@ -47,7 +47,7 @@
 {{else}}
 <div class="mb-4">
   <input id="e-search" type="search" placeholder="Search endpoint…"
-         class="w-full sm:w-72 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+         class="w-full sm:w-72 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500">
 </div>
 <p id="e-search-empty" class="hidden text-sm text-slate-500 dark:text-slate-400 py-6 text-center">No endpoint matches your search.</p>
 {{end}}
@@ -56,7 +56,7 @@
 {{range .Data.Endpoints}}
 {{$ev := .}}
 {{$e := .E}}
-<div class="e-item bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col"
+<div class="e-item bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 flex flex-col"
      data-haystack="{{lower $e.Name}} {{lower $e.HostPort}}">
   <div class="flex items-start gap-3">
     <div class="min-w-0 flex-1">
@@ -94,31 +94,31 @@
               <button class="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white underline">regenerate</button>
             </form>
           </div>
-          <code id="token-{{$e.ID}}" class="block font-mono break-all bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">{{$e.UploadToken}}</code>
+          <code id="token-{{$e.ID}}" class="block font-mono break-all bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm px-2 py-1">{{$e.UploadToken}}</code>
         </div>
         <div>
           <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Status push (cron)</span>
             <button type="button" data-copy="#push-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button></div>
-          <pre id="push-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">wg show all dump | curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
+          <pre id="push-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm px-2 py-1">wg show all dump | curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
   --data-binary @- {{$.Data.BaseURL}}/api/endpoints/{{$e.ID}}/status</pre>
         </div>
         <div>
           <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Expected peers</span>
             <button type="button" data-copy="#peers-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button></div>
-          <pre id="peers-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
+          <pre id="peers-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm px-2 py-1">curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
   "{{$.Data.BaseURL}}/api/endpoints/{{$e.ID}}/expected-peers?format=wg"</pre>
         </div>
         <div>
           <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Fetch full config (wg0.conf)</span>
             <button type="button" data-copy="#pull-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button></div>
-          <pre id="pull-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
+          <pre id="pull-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm px-2 py-1">curl -s -H "Authorization: Bearer {{$e.UploadToken}}" \
   "{{$.Data.BaseURL}}/api/endpoints/{{$e.ID}}/config" > /etc/wireguard/wg0.conf</pre>
         </div>
         <div>
           <div class="flex items-center gap-2 mb-1"><span class="text-slate-500 dark:text-slate-400">Concentrator config (wg0.conf)</span>
             <button type="button" data-copy="#conf-{{$e.ID}}" class="text-emerald-700 hover:underline">copy</button>
             <a href="/admin/endpoints/{{$e.ID}}/config" download class="text-emerald-700 hover:underline">download</a></div>
-          <pre id="conf-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1">{{$ev.Config}}</pre>
+          <pre id="conf-{{$e.ID}}" class="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm px-2 py-1">{{$ev.Config}}</pre>
         </div>
       </div>
     </details>

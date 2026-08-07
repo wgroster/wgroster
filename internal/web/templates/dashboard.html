@@ -4,7 +4,7 @@
   {{if .Data}}<span class="text-sm text-slate-400 dark:text-slate-500">{{len .Data}} machine{{if gt (len .Data) 1}}s{{end}}</span>{{end}}
 </div>
 
-<div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 mb-8">
+<div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 mb-8">
   <h2 class="font-medium text-slate-900 dark:text-slate-100 mb-1">Add a machine</h2>
   <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
     Generate a key pair on your machine, then paste the <strong>public</strong> key below.
@@ -13,19 +13,19 @@
   <div class="relative mb-4">
     <pre id="keygen" class="bg-slate-900 text-slate-100 text-xs rounded-lg p-3 pr-16 overflow-x-auto">wg genkey | tee privatekey | wg pubkey</pre>
     <button type="button" data-copy="#keygen"
-            class="absolute top-2 right-2 text-xs bg-white/10 hover:bg-white/20 text-slate-200 rounded px-2 py-1">copy</button>
+            class="absolute top-2 right-2 text-xs bg-white/10 hover:bg-white/20 text-slate-200 rounded-sm px-2 py-1">copy</button>
   </div>
   <form method="post" action="/machines" class="grid sm:grid-cols-[1fr_2fr_auto] gap-3 items-end">
     <input type="hidden" name="csrf" value="{{.Session.CSRF}}">
     <div>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Machine name</label>
       <input name="name" required placeholder="laptop"
-             class="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+             class="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500">
     </div>
     <div>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Public key</label>
       <input id="public_key" name="public_key" required placeholder="abc...="
-             class="w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+             class="w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500">
     </div>
     <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-4 py-2">Add</button>
   </form>
@@ -40,13 +40,13 @@
       <span class="text-xs text-slate-500 dark:text-slate-400">Private key</span>
       <button type="button" data-copy="#privkey-out" class="text-emerald-700 hover:underline text-xs">copy</button>
     </div>
-    <code id="privkey-out" class="block font-mono text-sm break-all bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1 mt-1"></code>
+    <code id="privkey-out" class="block font-mono text-sm break-all bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm px-2 py-1 mt-1"></code>
     <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">The public key is filled in above — name your machine and click Add.</p>
   </div>
 </div>
 
 {{if .SelfEnroll}}
-<div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 mb-8">
+<div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 mb-8">
   <h2 class="font-medium text-slate-900 dark:text-slate-100 mb-1">Add a mobile device (scan to set up)</h2>
   <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
     Name your device and we'll generate the keys <strong>in your browser</strong> and show a QR to scan from the
@@ -56,7 +56,7 @@
     <div class="flex-1 min-w-[12rem]">
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Device name</label>
       <input id="enroll-name" placeholder="my-phone"
-             class="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+             class="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500">
     </div>
     <button type="button" data-action="enroll" data-csrf="{{.Session.CSRF}}"
             class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-4 py-2">Generate &amp; show QR</button>
@@ -91,7 +91,7 @@
 {{else}}
 <div class="space-y-3">
   {{range .Data}}
-  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-wrap items-center gap-4">
+  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 flex flex-wrap items-center gap-4">
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2">
         <span class="font-medium text-slate-900 dark:text-slate-100">{{.M.Name}}</span>
@@ -104,8 +104,8 @@
         {{end}}
       </div>
       <div class="flex flex-wrap items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mt-1.5">
-        {{if .M.Address}}<span class="font-mono text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded px-1.5 py-0.5">{{.M.Address}}</span>{{end}}
-        {{range .Endpoints}}<span class="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded px-1.5 py-0.5">{{.Name}}</span>{{end}}
+        {{if .M.Address}}<span class="font-mono text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-sm px-1.5 py-0.5">{{.M.Address}}</span>{{end}}
+        {{range .Endpoints}}<span class="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-sm px-1.5 py-0.5">{{.Name}}</span>{{end}}
         {{if eq .M.Status "active"}}<span class="text-xs cursor-help" title="{{exact .LastHandshake}}">· last handshake {{since .LastHandshake}}</span>{{end}}
       </div>
       <div class="text-xs text-slate-400 dark:text-slate-500 font-mono mt-1.5 truncate">{{.M.PublicKey}}</div>
@@ -131,10 +131,10 @@
         <div class="p-6 space-y-4">
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Machine name
             <input name="name" required value="{{.M.Name}}"
-                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Public key
             <input name="public_key" required value="{{.M.PublicKey}}"
-                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
           <p class="text-xs text-slate-400 dark:text-slate-500">Changing the public key sends this machine back for administrator approval. Your IP and endpoints are kept.</p>
         </div>
         <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">

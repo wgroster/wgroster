@@ -28,13 +28,27 @@ go run ./cmd/wgroster -config config.yaml
 go run ./cmd/wgroster -hash-password
 ```
 
-Tailwind CSS is **prebuilt** and committed at `internal/web/static/app.css`.
-After changing any template's CSS classes, regenerate it (otherwise new classes
-have no styles):
+Tailwind CSS (**v4**) is **prebuilt** and committed at
+`internal/web/static/app.css`. After changing any template's CSS classes,
+regenerate it (otherwise new classes have no styles):
 
 ```sh
-tailwindcss -i tailwind.input.css -o internal/web/static/app.css --minify
+# One-off: grab the standalone CLI (no node/npm needed, nothing to commit).
+curl -fsSL -o /tmp/tailwindcss \
+  https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-macos-arm64
+chmod +x /tmp/tailwindcss
+
+/tmp/tailwindcss -i tailwind.input.css -o internal/web/static/app.css --minify
 ```
+
+Swap `macos-arm64` for your platform (`linux-x64`, …). `npx @tailwindcss/cli`
+does **not** work here: v4 resolves `@import "tailwindcss"` from the input CSS
+file's directory, so it needs a real `node_modules` at the repo root.
+
+Configuration is CSS-first in `tailwind.input.css` — there is no
+`tailwind.config.js`. `@custom-variant dark` replaces v3's `darkMode: "class"`,
+and `source(none)` plus an explicit `@source` keeps content scanning limited to
+the templates.
 
 ## Architecture
 

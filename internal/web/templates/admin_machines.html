@@ -8,7 +8,7 @@
   {{end}}
 </div>
 
-<details class="group rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 overflow-hidden bg-white dark:bg-slate-900">
+<details class="group rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs mb-6 overflow-hidden bg-white dark:bg-slate-900">
   <summary class="cursor-pointer list-none px-6 py-4 flex items-center gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
     <span class="h-8 w-8 grid place-items-center rounded-lg bg-white/20 text-lg leading-none">+</span>
     <span class="font-medium">Create a machine</span>
@@ -17,19 +17,19 @@
   <form method="post" action="/admin/machines" class="p-6 grid sm:grid-cols-2 gap-4">
     <input type="hidden" name="csrf" value="{{.Session.CSRF}}">
     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Owner (LDAP uid)
-      <input name="owner_uid" required placeholder="alice" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <input name="owner_uid" required placeholder="alice" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Machine name
-      <input name="name" required placeholder="laptop" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <input name="name" required placeholder="laptop" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 sm:col-span-2">Public key
-      <input name="public_key" required placeholder="abc...=" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <input name="public_key" required placeholder="abc...=" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Address (VPN IP)
-      <input name="address" required value="{{.Data.SuggestedIP}}" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+      <input name="address" required value="{{.Data.SuggestedIP}}" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
     <div class="sm:col-span-2">
       <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Endpoints</span>
       <div class="flex flex-wrap gap-2">
         {{range .Data.AllEndpoints}}
         <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1 hover:bg-slate-50 cursor-pointer">
-          <input type="checkbox" name="endpoint_ids" value="{{.ID}}" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+          <input type="checkbox" name="endpoint_ids" value="{{.ID}}" class="rounded-sm border-slate-300 text-emerald-600 focus:ring-emerald-500">
           {{.Name}}
         </label>
         {{else}}
@@ -38,7 +38,7 @@
       </div>
     </div>
     <div class="sm:col-span-2">
-      <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-5 py-2.5 shadow-sm">Create &amp; activate</button>
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-5 py-2.5 shadow-xs">Create &amp; activate</button>
     </div>
   </form>
 </details>
@@ -48,7 +48,7 @@
 {{else}}
 <div class="flex flex-wrap items-center gap-2 mb-4">
   <input id="m-search" type="search" placeholder="Search machine or user…"
-         class="flex-1 min-w-[12rem] rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+         class="flex-1 min-w-[12rem] rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500">
   <div class="flex gap-1 text-sm">
     <button type="button" data-mfilter="all" class="rounded-lg px-3 py-1.5 bg-slate-900 text-white">All</button>
     <button type="button" data-mfilter="pending" class="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Pending</button>
@@ -63,7 +63,7 @@
      hx-get="/admin/machines" hx-trigger="every 20s" hx-select="#m-list" hx-target="#m-list" hx-swap="outerHTML">
 {{range .Data.Groups}}
 {{$g := .}}
-<section class="m-group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+<section class="m-group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
   <header class="flex items-center gap-3 px-5 py-4 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 border-b border-slate-100 dark:border-slate-800">
     {{if $g.HasPhoto}}
       <img src="/avatar/{{$g.UID}}" alt="" loading="lazy" class="h-9 w-9 shrink-0 rounded-full object-cover bg-slate-200 dark:bg-slate-700">
@@ -137,20 +137,20 @@
         <div class="p-6 space-y-4">
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Machine name
             <input name="name" required value="{{$m.M.Name}}"
-                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Public key
             <input name="public_key" required value="{{$m.M.PublicKey}}"
-                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Address (VPN IP)
             <input name="address" required value="{{if $m.M.Address}}{{$m.M.Address}}{{else}}{{$.Data.SuggestedIP}}{{end}}"
-                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"></label>
+                   class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
           <div>
             <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Endpoints</span>
             <div class="flex flex-wrap gap-2">
               {{range $.Data.AllEndpoints}}
               <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1 hover:bg-slate-50 cursor-pointer">
                 <input type="checkbox" name="endpoint_ids" value="{{.ID}}" {{if index $m.SelectedIDs .ID}}checked{{end}}
-                       class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                       class="rounded-sm border-slate-300 text-emerald-600 focus:ring-emerald-500">
                 {{.Name}}
               </label>
               {{else}}
