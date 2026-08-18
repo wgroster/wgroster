@@ -143,6 +143,8 @@ Copy `config.example.yaml` to `config.yaml` and adjust it. Key fields:
   `WG_SESSION_KEY` environment variable.
 - `local_admin` (optional) — built-in admin, checked before LDAP. LDAP becomes
   optional when it is set.
+- `audit_retention_days` — prune admin audit entries older than N days
+  (0 = keep forever).
 - `metrics_token`, `alert_webhook_url`, `geoip_db` / `geoip_asn_db`,
   `cookie_secure`, `trusted_proxy` — see the sections below.
 

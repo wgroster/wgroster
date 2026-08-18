@@ -75,6 +75,9 @@ type Config struct {
 	// PendingExpiryDays auto-deletes pending machines older than N days,
 	// freeing their reserved IP (0 = never).
 	PendingExpiryDays int `yaml:"pending_expiry_days"`
+	// AuditRetentionDays prunes audit entries older than N days (0 = keep
+	// forever). The audit log is append-only, so without this it grows unbounded.
+	AuditRetentionDays int `yaml:"audit_retention_days"`
 }
 
 // LocalAdmin is a built-in administrator account checked before LDAP.
@@ -215,6 +218,12 @@ func Load(path string) (*Config, error) {
 
 	if c.SelfEnroll && c.SelfEnrollEndpoint == "" {
 		return nil, fmt.Errorf("self_enroll requires self_enroll_endpoint (the endpoint name to enroll into)")
+	}
+	if c.PendingExpiryDays < 0 {
+		return nil, fmt.Errorf("pending_expiry_days must not be negative")
+	}
+	if c.AuditRetentionDays < 0 {
+		return nil, fmt.Errorf("audit_retention_days must not be negative")
 	}
 	return c, nil
 }

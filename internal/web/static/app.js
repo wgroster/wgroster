@@ -262,7 +262,8 @@
     if (e.key === "/") {
       var tag = (e.target && e.target.tagName) || "";
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
-      var box = document.getElementById("m-search") || document.getElementById("e-search");
+      var box = document.getElementById("m-search") || document.getElementById("e-search") ||
+        document.getElementById("a-search");
       if (box) { e.preventDefault(); box.focus(); }
     }
   });
@@ -415,6 +416,7 @@
 
   initFilter("m-search", "data-mfilter", ".m-item", ".m-group");
   initFilter("e-search", "data-efilter", ".e-item", null);
+  initFilter("a-search", "data-afilter", ".a-item", null);
 
   // After a poll swap replaces a list, re-apply the active search/filter so the
   // freshly rendered items honour it (the search box and chips live outside the

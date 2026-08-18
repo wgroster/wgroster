@@ -1,9 +1,20 @@
 {{define "content"}}
 <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 mb-6">Audit log</h1>
 
-{{if not .Data}}
+{{if not .Data.Entries}}
   <p class="text-slate-500 dark:text-slate-400 text-sm">No administrative action recorded yet.</p>
 {{else}}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+  <input id="a-search" type="search" placeholder="Search actor, action or target…"
+         class="flex-1 min-w-[12rem] rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500">
+  <div class="flex gap-1 text-sm">
+    {{range $.Data.Limits}}
+      <a href="/admin/audit?limit={{.}}" class="rounded-lg px-3 py-1.5 {{if eq . $.Data.Limit}}bg-slate-900 text-white{{else}}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300{{end}}">Last {{.}}</a>
+    {{end}}
+  </div>
+</div>
+<p id="a-search-empty" class="hidden text-sm text-slate-500 dark:text-slate-400 py-6 text-center">No entry matches your search.</p>
+
 <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
   <div class="overflow-x-auto">
   <table class="w-full text-sm whitespace-nowrap">
@@ -16,8 +27,8 @@
       </tr>
     </thead>
     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-      {{range .Data}}
-      <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+      {{range .Data.Entries}}
+      <tr class="a-item hover:bg-slate-50/60 dark:hover:bg-slate-800/40" data-haystack="{{lower .Actor}} {{lower .Action}} {{lower .Target}}">
         <td class="px-5 py-2.5 text-slate-600 dark:text-slate-300 cursor-help" title="{{exact .TS}}">{{ago .TS}}</td>
         <td class="px-5 py-2.5 text-slate-800 dark:text-slate-100">{{.Actor}}</td>
         <td class="px-5 py-2.5"><span class="font-mono text-xs rounded-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5">{{.Action}}</span></td>
@@ -28,5 +39,8 @@
   </table>
   </div>
 </div>
+{{if .Data.Truncated}}
+  <p class="mt-3 text-xs text-slate-400 dark:text-slate-500">Showing the {{.Data.Limit}} most recent entries; older ones are not listed.</p>
+{{end}}
 {{end}}
 {{end}}

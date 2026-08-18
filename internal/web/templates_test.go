@@ -52,8 +52,16 @@ func TestTemplatesExecute(t *testing.T) {
 			[]endpointAdminView{{E: ep, ExpectedN: 2, HasReport: true, ReportFresh: true, LastReport: time.Now()}},
 			"https://wg.example.com",
 		},
-		"admin_audit": []store.AuditEntry{
-			{TS: time.Now(), Actor: "admin", Action: "machine.create", Target: "alice/laptop"},
+		"admin_audit": struct {
+			Entries   []store.AuditEntry
+			Limit     int
+			Limits    []int
+			Truncated bool
+		}{
+			[]store.AuditEntry{{TS: time.Now(), Actor: "admin", Action: "machine.create", Target: "alice/laptop"}},
+			300,
+			auditLimits,
+			true,
 		},
 		"admin_status": []endpointStatus{},
 	}

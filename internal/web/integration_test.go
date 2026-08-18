@@ -819,3 +819,63 @@ func TestLinkUnlinkedPeer(t *testing.T) {
 		t.Errorf("approved machine: %+v", pm)
 	}
 }
+func TestAuditLimit(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want int
+	}{
+		{"", 300},
+		{"300", 300},
+		{"1000", 1000},
+		{"5000", 5000},
+		{"99999", 300}, // not offered: fall back rather than scan the whole table
+		{"0", 300},
+		{"-1", 300},
+		{"abc", 300},
+	}
+	for _, tc := range cases {
+		if got := auditLimit(tc.raw); got != tc.want {
+			t.Errorf("auditLimit(%q) = %d, want %d", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestAuditPage(t *testing.T) {
+	_, h, cookies, csrf := testServer(t)
+	// Any admin action records an audit entry.
+	do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+	})
+
+	w := do(t, h, "GET", "/admin/audit", cookies, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /admin/audit: got %d", w.Code)
+	}
+	body := w.Body.String()
+	// The filter box and per-row haystack drive the client-side search.
+	for _, want := range []string{`id="a-search"`, `class="a-item`, "data-haystack=", "paris"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("audit page missing %q", want)
+		}
+	}
+	// Every offered limit is reachable as a link.
+	for _, l := range auditLimits {
+		if !strings.Contains(body, fmt.Sprintf("/admin/audit?limit=%d", l)) {
+			t.Errorf("audit page missing the limit-%d link", l)
+		}
+	}
+
+	// A rejected limit still renders the page (falling back to the default).
+	if w := do(t, h, "GET", "/admin/audit?limit=99999", cookies, nil); w.Code != http.StatusOK {
+		t.Errorf("GET /admin/audit?limit=99999: got %d", w.Code)
+	}
+
+	// The page is admin-only.
+	srv2, h2, _, _ := testServer(t)
+	rec := httptest.NewRecorder()
+	bob, _ := srv2.sess.Issue(rec, "bob", "", false, false)
+	_ = bob
+	if w := do(t, h2, "GET", "/admin/audit", rec.Result().Cookies(), nil); w.Code == http.StatusOK {
+		t.Error("a non-admin session reached the audit page")
+	}
+}

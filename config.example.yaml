@@ -70,6 +70,10 @@ self_enroll_endpoint: ""
 max_pending_per_user: 0
 pending_expiry_days: 0
 
+# Prune admin audit entries older than N days (0 = keep forever). The audit log
+# is append-only, so leave it at 0 only if you archive the database elsewhere.
+audit_retention_days: 0
+
 # LDAP is optional when local_admin is configured.
 ldap:
   # OpenLDAP server URL.

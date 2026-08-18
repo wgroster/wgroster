@@ -25,13 +25,37 @@ func (s *Server) audit(r *http.Request, action, target string) {
 	}
 }
 
+// auditLimits are the row counts offered on the audit page. The first is the
+// default; anything else in ?limit= falls back to it, so the query never turns
+// into an unbounded scan.
+var auditLimits = []int{300, 1000, 5000}
+
+// auditLimit maps a ?limit= value to one of auditLimits, falling back to the
+// default for anything unrecognised.
+func auditLimit(raw string) int {
+	if v, err := strconv.Atoi(raw); err == nil {
+		for _, allowed := range auditLimits {
+			if v == allowed {
+				return v
+			}
+		}
+	}
+	return auditLimits[0]
+}
+
 func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
-	entries, err := s.store.ListAudit(300)
+	limit := auditLimit(r.URL.Query().Get("limit"))
+	entries, err := s.store.ListAudit(limit)
 	if err != nil {
 		s.serverError(w, err)
 		return
 	}
-	s.render(w, r, "admin_audit", "Audit log", "audit", entries)
+	s.render(w, r, "admin_audit", "Audit log", "audit", struct {
+		Entries   []store.AuditEntry
+		Limit     int
+		Limits    []int
+		Truncated bool
+	}{entries, limit, auditLimits, len(entries) == limit})
 }
 
 // ---- Machines administration ------------------------------------------------

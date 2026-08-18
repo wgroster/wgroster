@@ -19,6 +19,16 @@ func (s *Store) AddAudit(actor, action, target string) error {
 	return err
 }
 
+// DeleteAuditBefore removes audit entries older than cutoff and returns how many
+// were deleted. The audit log is append-only and otherwise grows without bound.
+func (s *Store) DeleteAuditBefore(cutoff time.Time) (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM audit_log WHERE ts < ?`, cutoff.Unix())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // ListAudit returns the most recent audit entries (newest first).
 func (s *Store) ListAudit(limit int) ([]AuditEntry, error) {
 	rows, err := s.db.Query(
