@@ -45,6 +45,8 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	gauge("wg_build_info", "Build information: always 1, labelled with the running version.")
+	fmt.Fprintf(&b, "wg_build_info{version=\"%s\"} 1\n", escapeLabel(s.version))
 	gauge("wg_endpoints_total", "Number of declared endpoints.")
 	fmt.Fprintf(&b, "wg_endpoints_total %d\n", len(statuses))
 	gauge("wg_endpoints_reporting", "Endpoints with a fresh status report.")
@@ -56,29 +58,29 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 	gauge("wg_peers_online", "Expected peers seen online, per endpoint.")
 	for _, es := range statuses {
-		fmt.Fprintf(&b, "wg_peers_online{endpoint=%q} %d\n", escapeLabel(es.E.Name), es.OnlineN)
+		fmt.Fprintf(&b, "wg_peers_online{endpoint=\"%s\"} %d\n", escapeLabel(es.E.Name), es.OnlineN)
 	}
 	gauge("wg_peers_offline", "Expected peers reported but stale, per endpoint.")
 	for _, es := range statuses {
-		fmt.Fprintf(&b, "wg_peers_offline{endpoint=%q} %d\n", escapeLabel(es.E.Name), countState(es, statePeerOffline))
+		fmt.Fprintf(&b, "wg_peers_offline{endpoint=\"%s\"} %d\n", escapeLabel(es.E.Name), countState(es, statePeerOffline))
 	}
 	gauge("wg_peers_missing", "Expected peers absent from the hub report, per endpoint.")
 	for _, es := range statuses {
-		fmt.Fprintf(&b, "wg_peers_missing{endpoint=%q} %d\n", escapeLabel(es.E.Name), es.Missing)
+		fmt.Fprintf(&b, "wg_peers_missing{endpoint=\"%s\"} %d\n", escapeLabel(es.E.Name), es.Missing)
 	}
 	gauge("wg_peers_unlinked", "Reported peers whose key is known to the portal but not active on this endpoint.")
 	for _, es := range statuses {
-		fmt.Fprintf(&b, "wg_peers_unlinked{endpoint=%q} %d\n", escapeLabel(es.E.Name), es.Unlinked)
+		fmt.Fprintf(&b, "wg_peers_unlinked{endpoint=\"%s\"} %d\n", escapeLabel(es.E.Name), es.Unlinked)
 	}
 	gauge("wg_peers_unexpected", "Reported peers whose public key is unknown to the portal, per endpoint.")
 	for _, es := range statuses {
-		fmt.Fprintf(&b, "wg_peers_unexpected{endpoint=%q} %d\n", escapeLabel(es.E.Name), es.Extra)
+		fmt.Fprintf(&b, "wg_peers_unexpected{endpoint=\"%s\"} %d\n", escapeLabel(es.E.Name), es.Extra)
 	}
 
 	gauge("wg_last_report_age_seconds", "Seconds since the last status report, per endpoint.")
 	for _, es := range statuses {
 		if es.HasReport {
-			fmt.Fprintf(&b, "wg_last_report_age_seconds{endpoint=%q} %d\n",
+			fmt.Fprintf(&b, "wg_last_report_age_seconds{endpoint=\"%s\"} %d\n",
 				escapeLabel(es.E.Name), int64(time.Since(es.LastReport).Seconds()))
 		}
 	}
@@ -109,6 +111,9 @@ func countState(es endpointStatus, state string) int {
 	return n
 }
 
+// escapeLabel escapes a Prometheus label value: only backslash, double quote and
+// newline are special in the text exposition format. Emit the result inside
+// literal quotes ("%s"), never with %q — that would escape it a second time.
 func escapeLabel(v string) string {
 	v = strings.ReplaceAll(v, `\`, `\\`)
 	v = strings.ReplaceAll(v, `"`, `\"`)

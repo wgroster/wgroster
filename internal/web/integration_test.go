@@ -879,3 +879,25 @@ func TestAuditPage(t *testing.T) {
 		t.Error("a non-admin session reached the audit page")
 	}
 }
+func TestMetricsBuildInfoAndLabelEscaping(t *testing.T) {
+	_, h, cookies, csrf := testServer(t)
+	// A quote in the endpoint name must be escaped exactly once.
+	do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {`pa"ris`}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+	})
+
+	w := do(t, h, "GET", "/metrics", cookies, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /metrics: got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `wg_build_info{version="dev"} 1`) {
+		t.Errorf("/metrics missing wg_build_info\n%s", body)
+	}
+	if !strings.Contains(body, `wg_peers_online{endpoint="pa\"ris"}`) {
+		t.Errorf("endpoint label is not escaped as Prometheus expects\n%s", body)
+	}
+	if strings.Contains(body, `\\"`) {
+		t.Errorf("endpoint label is double-escaped\n%s", body)
+	}
+}

@@ -246,6 +246,7 @@ optionally `geoip_asn_db` — country/city/ASN, resolved offline).
 `/metrics` exposes a Prometheus model (never anonymous — needs `metrics_token`
 or an admin session):
 
+- `wg_build_info{version="…"}` — always 1, labelled with the running version.
 - `wg_endpoints_total`, `wg_endpoints_reporting`, `wg_machines_total`,
   `wg_machines_pending`
 - `wg_peers_online|offline|missing|unlinked|unexpected{endpoint="…"}` —
