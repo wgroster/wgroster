@@ -195,7 +195,7 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 
 	// Lazily refresh missing or stale directory profiles in the background, so
 	// names and avatars appear on a subsequent poll (no-op without LDAP).
-	s.refreshProfilesAsync(ownerUIDs)
+	s.refreshProfilesAsync(ownerUIDs, profiles)
 
 	return out, nil
 }

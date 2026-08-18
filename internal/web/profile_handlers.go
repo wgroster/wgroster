@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/wgroster/wgroster/internal/store"
 )
 
 // profileTTL is how long a cached directory profile is considered fresh before
@@ -39,29 +41,39 @@ func (s *Server) cacheProfile(uid, name string, photo []byte) {
 	}
 }
 
+// staleUIDs returns the uids whose cached profile is missing or older than
+// profileTTL. cached is the profile map the calling page already loaded, so this
+// decision costs no query.
+func staleUIDs(uids []string, cached map[string]store.ProfileMeta, now time.Time) []string {
+	var stale []string
+	for _, uid := range uids {
+		if uid == "" {
+			continue
+		}
+		p, found := cached[uid]
+		if found && now.Sub(p.FetchedAt) < profileTTL {
+			continue
+		}
+		stale = append(stale, uid)
+	}
+	return stale
+}
+
 // refreshProfilesAsync refreshes, in the background, the directory profiles of
-// the given uids whose cache is missing or older than profileTTL. It is a no-op
-// unless the directory can be queried for arbitrary users (LDAP configured,
-// with a service account or anonymous reads). A per-uid in-flight guard
-// prevents concurrent page loads from piling up duplicate LDAP queries for the
-// same user.
-func (s *Server) refreshProfilesAsync(uids []string) {
+// the given uids whose cache is missing or older than profileTTL. cached is the
+// profile map the calling page already holds, so deciding what is stale costs no
+// further query — this runs on every status poll. It is a no-op unless the
+// directory can be queried for arbitrary users (LDAP configured, with a service
+// account or anonymous reads). A per-uid in-flight guard prevents concurrent
+// page loads from piling up duplicate LDAP queries for the same user.
+func (s *Server) refreshProfilesAsync(uids []string, cached map[string]store.ProfileMeta) {
 	if !s.auth.ProfileLookupEnabled() {
 		return
 	}
-	now := time.Now()
 	var stale []string
 	s.profileMu.Lock()
-	for _, uid := range uids {
-		if uid == "" || s.profileInflight[uid] {
-			continue
-		}
-		_, _, fetchedAt, found, err := s.store.UserProfileMeta(uid)
-		if err != nil {
-			log.Printf("profile meta for %q: %v", uid, err)
-			continue
-		}
-		if found && now.Sub(fetchedAt) < profileTTL {
+	for _, uid := range staleUIDs(uids, cached, time.Now()) {
+		if s.profileInflight[uid] {
 			continue
 		}
 		s.profileInflight[uid] = true

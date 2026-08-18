@@ -193,7 +193,7 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 
 	// Lazily refresh stale/missing profiles in the background (no-op without an
 	// LDAP service account); photos and names appear on a subsequent load.
-	s.refreshProfilesAsync(order)
+	s.refreshProfilesAsync(order, profiles)
 
 	s.render(w, r, "admin_machines", "Machines", "machines", struct {
 		Groups       []*userGroup

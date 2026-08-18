@@ -136,6 +136,10 @@ func TestAllUserProfileMetas(t *testing.T) {
 	if metas["bob"].HasPhoto {
 		t.Errorf("bob = %+v, want HasPhoto false", metas["bob"])
 	}
+	// FetchedAt drives the lazy-refresh decision, so it must come back set.
+	if time.Since(metas["alice"].FetchedAt) > time.Minute {
+		t.Errorf("alice FetchedAt = %s, want roughly now", metas["alice"].FetchedAt)
+	}
 	// A missing uid yields the zero value, which the pages treat as "no profile".
 	if metas["ghost"].DisplayName != "" || metas["ghost"].HasPhoto {
 		t.Errorf("ghost = %+v, want zero", metas["ghost"])
