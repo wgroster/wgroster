@@ -179,6 +179,17 @@ func TestHotQueriesUseIndexes(t *testing.T) {
 			query: `SELECT id FROM machine WHERE owner_uid='x'`,
 			index: "idx_machine_owner",
 		},
+		{
+			// This one runs inside every status upload, not on a read path.
+			name:  "history retention trim",
+			query: `DELETE FROM status_history WHERE report_ts < 0`,
+			index: "idx_status_history_ts",
+		},
+		{
+			name:  "audit retention prune",
+			query: `DELETE FROM audit_log WHERE ts < 0`,
+			index: "idx_audit_ts",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -203,5 +214,46 @@ func TestHotQueriesUseIndexes(t *testing.T) {
 				t.Errorf("query plan does not use %s:\n%s", tc.index, plan)
 			}
 		})
+	}
+}
+
+// The trim that runs inside every status upload must actually drop samples past
+// the retention window while keeping the recent ones.
+func TestStatusHistoryRetention(t *testing.T) {
+	st := newTestStore(t)
+	ep := &Endpoint{Name: "par", PublicKey: "ep", HostPort: "par:1", UploadToken: "t"}
+	if err := st.CreateEndpoint(ep); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().Truncate(time.Second)
+	old := now.Add(-historyRetention - time.Hour)
+	recent := now.Add(-time.Hour)
+	for _, ts := range []time.Time{old, recent, now} {
+		if err := st.ReplaceStatus(ep.ID, []StatusPeer{
+			{PublicKey: "k", LastHandshake: ts, RX: 1, TX: 1},
+		}, ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	samples, err := st.PeerSeries(ep.ID, "k", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(samples) != 2 {
+		t.Fatalf("got %d samples, want the two inside the retention window", len(samples))
+	}
+	// Oldest first, and the out-of-window sample is gone.
+	if !samples[0].TS.Equal(recent) || !samples[1].TS.Equal(now) {
+		t.Errorf("samples = %v / %v, want %v / %v", samples[0].TS, samples[1].TS, recent, now)
+	}
+
+	first, found, err := st.PeerFirstSeen(ep.ID, "k")
+	if err != nil || !found {
+		t.Fatalf("PeerFirstSeen: found %v, err %v", found, err)
+	}
+	if !first.Equal(recent) {
+		t.Errorf("first seen = %s, want %s (the trimmed sample must not linger)", first, recent)
 	}
 }

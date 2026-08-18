@@ -131,8 +131,16 @@ CREATE INDEX IF NOT EXISTS idx_status_history ON status_history(endpoint_id, rep
 CREATE INDEX IF NOT EXISTS idx_status_history_peer
   ON status_history(endpoint_id, public_key, report_ts);
 
+-- The retention trim runs inside every status upload and filters on report_ts
+-- alone, so neither index above applies to it: without this one it scans the
+-- largest table in the database once per report, per endpoint.
+CREATE INDEX IF NOT EXISTS idx_status_history_ts ON status_history(report_ts);
+
 -- Machines are listed and counted per owner on every dashboard load.
 CREATE INDEX IF NOT EXISTS idx_machine_owner ON machine(owner_uid);
+
+-- Same shape as the trim above: the hourly audit prune filters on ts alone.
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
 `
 
 // Open opens (and migrates) the SQLite database at path.
