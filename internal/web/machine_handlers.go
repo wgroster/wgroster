@@ -18,27 +18,6 @@ type machineView struct {
 	LastHandshake time.Time
 }
 
-func (s *Server) buildMachineView(m *store.Machine) (machineView, error) {
-	mv := machineView{M: m}
-	eps, err := s.store.EndpointsForMachine(m.ID)
-	if err != nil {
-		return mv, err
-	}
-	mv.Endpoints = eps
-
-	peers, err := s.store.PeersByKey(m.PublicKey)
-	if err != nil {
-		return mv, err
-	}
-	for _, p := range peers {
-		if p.LastHandshake.After(mv.LastHandshake) {
-			mv.LastHandshake = p.LastHandshake
-		}
-	}
-	mv.Online = online(mv.LastHandshake)
-	return mv, nil
-}
-
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	sess := sessionFrom(r)
 	machines, err := s.store.ListMachinesByOwner(sess.UID)
@@ -46,12 +25,37 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, err)
 		return
 	}
+	// This page auto-refreshes every 20s, so it is built with a fixed number of
+	// queries: the endpoint links and last handshakes of the user's machines are
+	// fetched in one query each instead of two queries per machine.
+	links, err := s.store.EndpointLinks(sess.UID)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	handshakes, err := s.store.LastHandshakeByKey(sess.UID)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	endpoints, err := s.store.ListEndpoints()
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
 	views := make([]machineView, 0, len(machines))
 	for _, m := range machines {
-		mv, err := s.buildMachineView(m)
-		if err != nil {
-			s.serverError(w, err)
-			return
+		mv := machineView{M: m, LastHandshake: handshakes[m.PublicKey]}
+		mv.Online = online(mv.LastHandshake)
+		linked := make(map[int64]bool, len(links[m.ID]))
+		for _, id := range links[m.ID] {
+			linked[id] = true
+		}
+		// endpoints is ordered by name, so filtering it keeps that order.
+		for _, e := range endpoints {
+			if linked[e.ID] {
+				mv.Endpoints = append(mv.Endpoints, e)
+			}
 		}
 		views = append(views, mv)
 	}

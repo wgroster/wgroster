@@ -63,31 +63,28 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 
 	out := make([]endpointStatus, 0, len(endpoints))
 
-	// Owner identity is resolved once per uid for the whole build: the same owner
-	// usually has several machines, spread over several endpoints, and every
-	// lookup goes through the single serialized SQLite connection.
-	type ownerProfile struct {
-		name     string
-		hasPhoto bool
+	// Owner identity comes from a single profiles query for the whole build: this
+	// runs on every status poll (and every /metrics scrape), and each query goes
+	// through the single serialized SQLite connection.
+	profiles, err := s.store.AllUserProfileMetas()
+	if err != nil {
+		return nil, err
 	}
-	profiles := map[string]ownerProfile{}
+	seen := map[string]bool{}
 	var ownerUIDs []string
 	setOwner := func(ps *peerStatus, m *store.Machine) {
 		ps.OwnerUID = m.OwnerUID
 		ps.Owner = m.OwnerDisplay()
-		p, cached := profiles[m.OwnerUID]
-		if !cached {
-			if name, hasPhoto, _, found, err := s.store.UserProfileMeta(m.OwnerUID); err == nil && found {
-				p = ownerProfile{name: name, hasPhoto: hasPhoto}
-			}
-			profiles[m.OwnerUID] = p
+		if !seen[m.OwnerUID] {
+			seen[m.OwnerUID] = true
 			ownerUIDs = append(ownerUIDs, m.OwnerUID)
 		}
+		p := profiles[m.OwnerUID]
 		// The directory name wins over the copy cached on the machine row.
-		if p.name != "" {
-			ps.Owner = p.name
+		if p.DisplayName != "" {
+			ps.Owner = p.DisplayName
 		}
-		ps.HasPhoto = p.hasPhoto
+		ps.HasPhoto = p.HasPhoto
 	}
 
 	for _, e := range endpoints {

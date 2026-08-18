@@ -298,6 +298,35 @@ func (s *Store) PeersByKey(pubKey string) ([]StatusPeer, error) {
 	return out, rows.Err()
 }
 
+// LastHandshakeByKey returns the most recent handshake reported for each public
+// key, across all endpoints — for the whole fleet or, when ownerUID is non-empty,
+// for that user's machines only. Listing pages use it to avoid one PeersByKey
+// query per machine.
+func (s *Store) LastHandshakeByKey(ownerUID string) (map[string]time.Time, error) {
+	q := `SELECT public_key, MAX(last_handshake) FROM status_peer`
+	var args []any
+	if ownerUID != "" {
+		q += ` WHERE public_key IN (SELECT public_key FROM machine WHERE owner_uid=?)`
+		args = append(args, ownerUID)
+	}
+	q += ` GROUP BY public_key`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]time.Time{}
+	for rows.Next() {
+		var k string
+		var hs int64
+		if err := rows.Scan(&k, &hs); err != nil {
+			return nil, err
+		}
+		out[k] = time.Unix(hs, 0)
+	}
+	return out, rows.Err()
+}
+
 // LastReport returns the most recent report time for an endpoint, if any.
 func (s *Store) LastReport(endpointID int64) (time.Time, bool, error) {
 	var ts int64

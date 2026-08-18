@@ -215,6 +215,32 @@ func (s *Store) EndpointIDsForMachine(machineID int64) ([]int64, error) {
 	return out, rows.Err()
 }
 
+// EndpointLinks returns machine-to-endpoint links keyed by machine id, for the
+// whole fleet or, when ownerUID is non-empty, for that user's machines only.
+// Listing pages use it to avoid one EndpointIDsForMachine query per machine.
+func (s *Store) EndpointLinks(ownerUID string) (map[int64][]int64, error) {
+	q := `SELECT machine_id, endpoint_id FROM machine_endpoint`
+	var args []any
+	if ownerUID != "" {
+		q += ` WHERE machine_id IN (SELECT id FROM machine WHERE owner_uid=?)`
+		args = append(args, ownerUID)
+	}
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64][]int64{}
+	for rows.Next() {
+		var mid, eid int64
+		if err := rows.Scan(&mid, &eid); err != nil {
+			return nil, err
+		}
+		out[mid] = append(out[mid], eid)
+	}
+	return out, rows.Err()
+}
+
 // EndpointsForMachine returns the full endpoint records linked to a machine.
 func (s *Store) EndpointsForMachine(machineID int64) ([]*Endpoint, error) {
 	rows, err := s.db.Query(`SELECT `+endpointCols+` FROM endpoint e

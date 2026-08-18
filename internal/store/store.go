@@ -67,6 +67,12 @@ CREATE TABLE IF NOT EXISTS status_peer (
   PRIMARY KEY (endpoint_id, public_key)
 );
 
+-- The dashboard and the admin machines list resolve a peer by public key alone
+-- (across every endpoint). The primary key is (endpoint_id, public_key), whose
+-- leading column is the endpoint, so without this index each lookup scans the
+-- whole table — once per machine, on every 20s dashboard poll.
+CREATE INDEX IF NOT EXISTS idx_status_peer_key ON status_peer(public_key);
+
 CREATE TABLE IF NOT EXISTS status_report (
   endpoint_id INTEGER PRIMARY KEY REFERENCES endpoint(id) ON DELETE CASCADE,
   received_at INTEGER NOT NULL
@@ -119,6 +125,14 @@ CREATE TABLE IF NOT EXISTS status_history (
   tx          INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_status_history ON status_history(endpoint_id, report_ts);
+-- Per-peer history (the drawer curves, first-seen) filters on the peer as well;
+-- the index above only narrows to the endpoint, leaving every sample of that
+-- endpoint's retention window to be scanned.
+CREATE INDEX IF NOT EXISTS idx_status_history_peer
+  ON status_history(endpoint_id, public_key, report_ts);
+
+-- Machines are listed and counted per owner on every dashboard load.
+CREATE INDEX IF NOT EXISTS idx_machine_owner ON machine(owner_uid);
 `
 
 // Open opens (and migrates) the SQLite database at path.

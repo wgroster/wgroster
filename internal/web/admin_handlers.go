@@ -69,13 +69,28 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Endpoint links, live handshakes and directory profiles are fetched in one
+	// query each rather than per machine: every query goes through the single
+	// serialized SQLite connection, and this page lists the whole fleet.
+	links, err := s.store.EndpointLinks("")
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	handshakes, err := s.store.LastHandshakeByKey("")
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	profiles, err := s.store.AllUserProfileMetas()
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+
 	views := make([]adminMachineView, 0, len(machines))
 	for _, m := range machines {
-		ids, err := s.store.EndpointIDsForMachine(m.ID)
-		if err != nil {
-			s.serverError(w, err)
-			return
-		}
+		ids := links[m.ID]
 		selected := make(map[int64]bool, len(ids))
 		var names []string
 		var primaryEID int64
@@ -94,17 +109,7 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		if m.ApprovedAt != nil {
 			mv.ApprovedAt = *m.ApprovedAt
 		}
-
-		peers, err := s.store.PeersByKey(m.PublicKey)
-		if err != nil {
-			s.serverError(w, err)
-			return
-		}
-		for _, p := range peers {
-			if p.LastHandshake.After(mv.LastHandshake) {
-				mv.LastHandshake = p.LastHandshake
-			}
-		}
+		mv.LastHandshake = handshakes[m.PublicKey]
 		mv.Online = online(mv.LastHandshake)
 		views = append(views, mv)
 	}
@@ -152,11 +157,11 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		// Enrich the group header with the cached directory profile: prefer the
 		// LDAP display name over the per-machine cached name, and flag a photo so
 		// the template shows the avatar instead of an initial badge.
-		if name, hasPhoto, _, found, err := s.store.UserProfileMeta(uid); err == nil && found {
-			if name != "" {
-				g.Name = name
+		if p, found := profiles[uid]; found {
+			if p.DisplayName != "" {
+				g.Name = p.DisplayName
 			}
-			g.HasPhoto = hasPhoto
+			g.HasPhoto = p.HasPhoto
 		}
 		totalPending += g.PendingN
 		groups = append(groups, g)

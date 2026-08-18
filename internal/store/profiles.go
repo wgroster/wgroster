@@ -46,6 +46,34 @@ func (s *Store) UserProfileMeta(uid string) (displayName string, hasPhoto bool, 
 	return displayName, photoLen > 0, time.Unix(fetched, 0), true, nil
 }
 
+// ProfileMeta is the light part of a cached directory profile: what a listing
+// page needs to render a name and decide between an avatar and an initial badge.
+type ProfileMeta struct {
+	DisplayName string
+	HasPhoto    bool
+}
+
+// AllUserProfileMetas returns every cached profile keyed by uid, without the
+// photo blobs. Listing pages use it to avoid one UserProfileMeta query per user.
+func (s *Store) AllUserProfileMetas() (map[string]ProfileMeta, error) {
+	rows, err := s.db.Query(`SELECT uid, display_name, COALESCE(LENGTH(photo), 0) FROM user_profile`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]ProfileMeta{}
+	for rows.Next() {
+		var uid string
+		var name string
+		var photoLen int
+		if err := rows.Scan(&uid, &name, &photoLen); err != nil {
+			return nil, err
+		}
+		out[uid] = ProfileMeta{DisplayName: name, HasPhoto: photoLen > 0}
+	}
+	return out, rows.Err()
+}
+
 // UserPhoto returns a user's cached photo and its MIME type. found is false when
 // no profile or no photo is cached.
 func (s *Store) UserPhoto(uid string) (photo []byte, photoType string, found bool, err error) {
