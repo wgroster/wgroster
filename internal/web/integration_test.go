@@ -453,7 +453,7 @@ func TestAlertsWebhook(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	firing := map[string]string{}
+	firing := map[alertKey]string{}
 	srv.evalAlerts(context.Background(), firing)
 
 	select {
@@ -819,6 +819,7 @@ func TestLinkUnlinkedPeer(t *testing.T) {
 		t.Errorf("approved machine: %+v", pm)
 	}
 }
+
 func TestAuditLimit(t *testing.T) {
 	cases := []struct {
 		raw  string
@@ -879,6 +880,7 @@ func TestAuditPage(t *testing.T) {
 		t.Error("a non-admin session reached the audit page")
 	}
 }
+
 func TestMetricsBuildInfoAndLabelEscaping(t *testing.T) {
 	_, h, cookies, csrf := testServer(t)
 	// A quote in the endpoint name must be escaped exactly once.

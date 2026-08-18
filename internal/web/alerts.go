@@ -26,7 +26,7 @@ func (s *Server) RunAlerts(ctx context.Context) {
 	if s.cfg.AlertWebhookURL == "" {
 		return
 	}
-	firing := map[string]string{} // "endpoint|type" -> detail
+	firing := map[alertKey]string{} // alert -> detail while it is firing
 	t := time.NewTicker(60 * time.Second)
 	defer t.Stop()
 	for {
@@ -39,15 +39,21 @@ func (s *Server) RunAlerts(ctx context.Context) {
 	}
 }
 
-func (s *Server) evalAlerts(ctx context.Context, firing map[string]string) {
+// alertKey identifies one alert: a condition type on a given endpoint.
+type alertKey struct {
+	endpoint string
+	typ      string // stale | missing | unlinked | unexpected | mismatch
+}
+
+func (s *Server) evalAlerts(ctx context.Context, firing map[alertKey]string) {
 	statuses, err := s.buildStatus()
 	if err != nil {
 		log.Printf("alerts: %v", err)
 		return
 	}
 
-	current := map[string]string{}
-	add := func(name, typ, detail string) { current[name+"|"+typ] = detail }
+	current := map[alertKey]string{}
+	add := func(name, typ, detail string) { current[alertKey{name, typ}] = detail }
 	for _, es := range statuses {
 		if es.HasReport && !es.ReportFresh {
 			add(es.E.Name, "stale", fmt.Sprintf("no report for %s", ago(es.LastReport)))
@@ -88,13 +94,9 @@ func (s *Server) evalAlerts(ctx context.Context, firing map[string]string) {
 	}
 }
 
-func (s *Server) postAlert(ctx context.Context, key, status, detail string) {
-	name, typ := key, ""
-	if i := indexByte(key, '|'); i >= 0 {
-		name, typ = key[:i], key[i+1:]
-	}
+func (s *Server) postAlert(ctx context.Context, key alertKey, status, detail string) {
 	body, _ := json.Marshal(alertPayload{
-		Endpoint: name, Type: typ, Status: status, Detail: detail,
+		Endpoint: key.endpoint, Type: key.typ, Status: status, Detail: detail,
 		Time: time.Now().Format(time.RFC3339),
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.AlertWebhookURL, bytes.NewReader(body))
@@ -110,13 +112,4 @@ func (s *Server) postAlert(ctx context.Context, key, status, detail string) {
 		return
 	}
 	resp.Body.Close()
-}
-
-func indexByte(s string, b byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == b {
-			return i
-		}
-	}
-	return -1
 }
