@@ -121,6 +121,7 @@ func (s *Server) Handler() http.Handler {
 
 	// User area.
 	mux.HandleFunc("GET /{$}", s.user(s.handleDashboard))
+	mux.HandleFunc("GET /machines/list", s.user(s.handleDashboardList))
 	mux.HandleFunc("POST /machines", s.user(s.handleAddMachine))
 	mux.HandleFunc("POST /machines/enroll", s.user(s.handleEnroll))
 	mux.HandleFunc("POST /machines/{id}", s.user(s.handleEditMachine))

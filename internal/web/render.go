@@ -21,7 +21,7 @@ var fullPages = []string{
 	"admin_machines", "admin_endpoints", "admin_status", "admin_audit",
 }
 
-var partials = []string{"status_table", "peer_drawer"}
+var partials = []string{"status_table", "peer_drawer", "dashboard_list"}
 
 var (
 	pageTmpls    = map[string]*template.Template{}
@@ -148,9 +148,16 @@ func initial(s string) string {
 }
 
 func loadTemplates() error {
+	// Every page is parsed with the layout and all partials, so a page can embed
+	// the same partial an htmx fragment endpoint serves (e.g. the dashboard
+	// machine list) instead of keeping a second copy of the markup.
+	files := []string{"templates/layout.html"}
+	for _, p := range partials {
+		files = append(files, "templates/"+p+".html")
+	}
 	for _, p := range fullPages {
 		t, err := template.New(p).Funcs(funcs).ParseFS(templatesFS,
-			"templates/layout.html", "templates/"+p+".html")
+			append(files, "templates/"+p+".html")...)
 		if err != nil {
 			return fmt.Errorf("parse page %s: %w", p, err)
 		}

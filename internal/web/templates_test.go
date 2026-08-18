@@ -22,8 +22,11 @@ func TestTemplatesExecute(t *testing.T) {
 	ep := &store.Endpoint{ID: 1, Name: "paris", HostPort: "vpn:51820", PublicKey: "k", UploadToken: "t"}
 
 	data := map[string]any{
-		"login":     nil,
-		"dashboard": []machineView{{M: m, Endpoints: []*store.Endpoint{ep}, Online: true, LastHandshake: time.Now()}},
+		"login": nil,
+		"dashboard": dashboardView{
+			Machines: []machineView{{M: m, Endpoints: []*store.Endpoint{ep}, Online: true, LastHandshake: time.Now()}},
+			CSRF:     "tok",
+		},
 		"machine_config": struct {
 			Machine *store.Machine
 			Config  string
@@ -94,6 +97,16 @@ func TestTemplatesExecute(t *testing.T) {
 			{Name: "(unknown)", PublicKey: "0BcD/eFgHiJkLmNoPqRsTuVwXyZ0123456789abcd=", State: statePeerExtra, RemoteEndpoint: "198.51.100.7:51820", HubAllowedIPs: "10.0.0.200/32"},
 		},
 	}}
+	dash := dashboardView{
+		Machines: []machineView{{M: m, Endpoints: []*store.Endpoint{ep}, Online: true, LastHandshake: time.Now()}},
+		CSRF:     "tok",
+	}
+	if err := partialTmpls["dashboard_list"].ExecuteTemplate(io.Discard, "dashboard_list", dash); err != nil {
+		t.Errorf("execute dashboard_list: %v", err)
+	}
+	if err := partialTmpls["dashboard_list"].ExecuteTemplate(io.Discard, "dashboard_list", dashboardView{}); err != nil {
+		t.Errorf("execute dashboard_list with no machine: %v", err)
+	}
 	if err := partialTmpls["status_table"].ExecuteTemplate(io.Discard, "status_table", summarize(statuses)); err != nil {
 		t.Errorf("execute status_table: %v", err)
 	}

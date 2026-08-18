@@ -955,3 +955,59 @@ func TestStatusCache(t *testing.T) {
 		t.Errorf("got %d endpoints after the TTL, want 2", len(fresh))
 	}
 }
+
+// The dashboard poll must fetch only the machine list, and that fragment must be
+// the same markup the page embeds — with a usable CSRF token, since the fragment
+// carries the delete/edit forms but has no page envelope.
+func TestDashboardListFragment(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+	})
+	do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"admin"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {"1"},
+	})
+
+	frag := do(t, h, "GET", "/machines/list", cookies, nil)
+	if frag.Code != http.StatusOK {
+		t.Fatalf("GET /machines/list: got %d", frag.Code)
+	}
+	body := frag.Body.String()
+	// A fragment, not a page: no layout, but the polling wrapper must come back or
+	// the swap would drop the refresh timer.
+	if strings.Contains(body, "<!doctype") || strings.Contains(body, "<nav") {
+		t.Error("fragment includes the page layout")
+	}
+	for _, want := range []string{`id="dash-list"`, "data-poll", `hx-get="/machines/list"`, "laptop", csrf} {
+		if !strings.Contains(body, want) {
+			t.Errorf("fragment missing %q", want)
+		}
+	}
+
+	// The page embeds the identical list, so the two never drift apart.
+	page := do(t, h, "GET", "/", cookies, nil)
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET /: got %d", page.Code)
+	}
+	if !strings.Contains(page.Body.String(), strings.TrimSpace(body)) {
+		t.Error("the page does not embed the same list markup as the fragment")
+	}
+
+	// It is per-user: another session must not see this machine.
+	rec := httptest.NewRecorder()
+	if _, err := srv.sess.Issue(rec, "bob", "", false, false); err != nil {
+		t.Fatal(err)
+	}
+	other := do(t, h, "GET", "/machines/list", rec.Result().Cookies(), nil)
+	if other.Code != http.StatusOK {
+		t.Fatalf("bob's fragment: got %d", other.Code)
+	}
+	if strings.Contains(other.Body.String(), "laptop") {
+		t.Error("the fragment leaked another user's machine")
+	}
+	// Anonymous access is refused like the page itself.
+	if anon := do(t, h, "GET", "/machines/list", nil, nil); anon.Code == http.StatusOK {
+		t.Error("the fragment is reachable without a session")
+	}
+}

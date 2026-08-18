@@ -18,32 +18,57 @@ type machineView struct {
 	LastHandshake time.Time
 }
 
+// dashboardView is what both the dashboard page and its htmx fragment render.
+// The CSRF token travels with it because the fragment has no page envelope.
+type dashboardView struct {
+	Machines []machineView
+	CSRF     string
+}
+
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	sess := sessionFrom(r)
-	machines, err := s.store.ListMachinesByOwner(sess.UID)
+	view, err := s.buildDashboard(r)
 	if err != nil {
 		s.serverError(w, err)
 		return
 	}
-	// This page auto-refreshes every 20s, so it is built with a fixed number of
+	s.render(w, r, "dashboard", "My machines", "dashboard", view)
+}
+
+// handleDashboardList serves just the machine list, which the page polls every
+// 20s. Before this existed the poll re-rendered the whole page (layout, forms,
+// dialogs) for htmx to keep one div of it.
+func (s *Server) handleDashboardList(w http.ResponseWriter, r *http.Request) {
+	view, err := s.buildDashboard(r)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	s.renderPartial(w, "dashboard_list", view)
+}
+
+func (s *Server) buildDashboard(r *http.Request) (dashboardView, error) {
+	sess := sessionFrom(r)
+	view := dashboardView{CSRF: sess.CSRF}
+	machines, err := s.store.ListMachinesByOwner(sess.UID)
+	if err != nil {
+		return view, err
+	}
+	// This list auto-refreshes every 20s, so it is built with a fixed number of
 	// queries: the endpoint links and last handshakes of the user's machines are
 	// fetched in one query each instead of two queries per machine.
 	links, err := s.store.EndpointLinks(sess.UID)
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
 	handshakes, err := s.store.LastHandshakeByKey(sess.UID)
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
 	endpoints, err := s.store.ListEndpoints()
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
-	views := make([]machineView, 0, len(machines))
+	view.Machines = make([]machineView, 0, len(machines))
 	for _, m := range machines {
 		mv := machineView{M: m, LastHandshake: handshakes[m.PublicKey]}
 		mv.Online = online(mv.LastHandshake)
@@ -57,9 +82,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 				mv.Endpoints = append(mv.Endpoints, e)
 			}
 		}
-		views = append(views, mv)
+		view.Machines = append(view.Machines, mv)
 	}
-	s.render(w, r, "dashboard", "My machines", "dashboard", views)
+	return view, nil
 }
 
 func (s *Server) handleAddMachine(w http.ResponseWriter, r *http.Request) {
