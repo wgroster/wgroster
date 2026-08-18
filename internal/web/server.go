@@ -162,8 +162,11 @@ func (s *Server) serverError(w http.ResponseWriter, err error) {
 // contentSecurityPolicy locks the page to first-party resources only. All
 // assets (CSS/JS) are self-hosted and there is no inline script or style, so
 // no 'unsafe-inline'/'unsafe-eval' is needed. QR codes render to data: images.
+// form-action is spelled out because default-src does not cover it: it keeps an
+// injected form from posting credentials or a CSRF token to another origin.
 const contentSecurityPolicy = "default-src 'self'; " +
 	"base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
+	"form-action 'self'; " +
 	"img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
 	"style-src 'self'; script-src 'self'"
 

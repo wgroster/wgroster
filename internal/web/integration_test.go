@@ -903,3 +903,12 @@ func TestMetricsBuildInfoAndLabelEscaping(t *testing.T) {
 		t.Errorf("endpoint label is double-escaped\n%s", body)
 	}
 }
+func TestCSPRestrictsFormAction(t *testing.T) {
+	_, h, _, _ := testServer(t)
+	csp := do(t, h, "GET", "/login", nil, nil).Header().Get("Content-Security-Policy")
+	// default-src does not cover form-action, so it must be spelled out: the login
+	// form posts a password and every mutating form posts a CSRF token.
+	if !strings.Contains(csp, "form-action 'self'") {
+		t.Errorf("CSP is missing form-action 'self': %q", csp)
+	}
+}
