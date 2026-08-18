@@ -23,20 +23,23 @@ const (
 )
 
 type peerStatus struct {
-	Name           string
-	Owner          string
-	PublicKey      string
-	Address        string // address assigned by the portal
-	State          string
-	Pending        bool   // known machine still awaiting approval (unlinked only)
-	RemoteEndpoint string // remote IP:port as seen by the hub
-	HubAllowedIPs  string // allowed-ips as seen by the hub (server side)
-	AddrMismatch   bool   // hub allowed-ips does not cover the assigned address
-	LastHandshake  time.Time
-	RX             int64
-	TX             int64
-	RxRate         int64 // bytes/s, from the last two reports
-	TxRate         int64
+	Name            string
+	Owner           string
+	OwnerUID        string // owner's uid, for the avatar URL; empty for an unknown key
+	HasPhoto        bool   // a directory photo is cached (served at /avatar/{uid})
+	SameOwnerAsPrev bool   // previous row has the same owner: name and avatar are printed once per run
+	PublicKey       string
+	Address         string // address assigned by the portal
+	State           string
+	Pending         bool   // known machine still awaiting approval (unlinked only)
+	RemoteEndpoint  string // remote IP:port as seen by the hub
+	HubAllowedIPs   string // allowed-ips as seen by the hub (server side)
+	AddrMismatch    bool   // hub allowed-ips does not cover the assigned address
+	LastHandshake   time.Time
+	RX              int64
+	TX              int64
+	RxRate          int64 // bytes/s, from the last two reports
+	TxRate          int64
 }
 
 type endpointStatus struct {
@@ -59,6 +62,34 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 	}
 
 	out := make([]endpointStatus, 0, len(endpoints))
+
+	// Owner identity is resolved once per uid for the whole build: the same owner
+	// usually has several machines, spread over several endpoints, and every
+	// lookup goes through the single serialized SQLite connection.
+	type ownerProfile struct {
+		name     string
+		hasPhoto bool
+	}
+	profiles := map[string]ownerProfile{}
+	var ownerUIDs []string
+	setOwner := func(ps *peerStatus, m *store.Machine) {
+		ps.OwnerUID = m.OwnerUID
+		ps.Owner = m.OwnerDisplay()
+		p, cached := profiles[m.OwnerUID]
+		if !cached {
+			if name, hasPhoto, _, found, err := s.store.UserProfileMeta(m.OwnerUID); err == nil && found {
+				p = ownerProfile{name: name, hasPhoto: hasPhoto}
+			}
+			profiles[m.OwnerUID] = p
+			ownerUIDs = append(ownerUIDs, m.OwnerUID)
+		}
+		// The directory name wins over the copy cached on the machine row.
+		if p.name != "" {
+			ps.Owner = p.name
+		}
+		ps.HasPhoto = p.hasPhoto
+	}
+
 	for _, e := range endpoints {
 		es := endpointStatus{E: e}
 
@@ -87,10 +118,10 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 			expectedKeys[m.PublicKey] = true
 			ps := peerStatus{
 				Name:      m.Name,
-				Owner:     m.OwnerDisplay(),
 				PublicKey: m.PublicKey,
 				Address:   m.Address,
 			}
+			setOwner(&ps, m)
 			if p, ok := reportedByKey[m.PublicKey]; ok {
 				ps.LastHandshake = p.LastHandshake
 				ps.RX, ps.TX = p.RX, p.TX
@@ -129,8 +160,8 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 			}
 			if m, err := s.store.MachineByPublicKey(p.PublicKey); err == nil {
 				ps.Name = m.Name
-				ps.Owner = m.OwnerDisplay()
 				ps.Address = m.Address
+				setOwner(&ps, m)
 				ps.AddrMismatch = m.Address != "" && p.AllowedIPs != "" && !allowedCovers(p.AllowedIPs, m.Address)
 				ps.Pending = m.Status == store.StatusPending
 				ps.State = statePeerUnlinked
@@ -152,8 +183,23 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 			}
 		}
 
+		// Consecutive rows of the same owner are visually grouped by the template,
+		// so the avatar and name are printed once per run instead of on every
+		// line. Expected peers already arrive ordered by owner; the reported-but-
+		// unexpected ones appended above are not, and simply do not group.
+		for i := 1; i < len(es.Peers); i++ {
+			if uid := es.Peers[i].OwnerUID; uid != "" && uid == es.Peers[i-1].OwnerUID {
+				es.Peers[i].SameOwnerAsPrev = true
+			}
+		}
+
 		out = append(out, es)
 	}
+
+	// Lazily refresh missing or stale directory profiles in the background, so
+	// names and avatars appear on a subsequent poll (no-op without LDAP).
+	s.refreshProfilesAsync(ownerUIDs)
+
 	return out, nil
 }
 

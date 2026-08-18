@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ var funcs = template.FuncMap{
 	"lower":      strings.ToLower,
 	"initial":    initial,
 	"sparkline":  sparkline,
+	"shortIPs":   shortIPs,
 }
 
 // sparkline renders a tiny inline SVG line chart from numeric samples. The
@@ -118,6 +120,23 @@ func plural(n int64) string {
 		return ""
 	}
 	return "s"
+}
+
+// shortIPs drops the prefix length from single-host entries of a comma-separated
+// allowed-ips list ("10.0.0.7/32, fd00::7/128" -> "10.0.0.7, fd00::7"). In this
+// model a client address is always a single host, so the suffix is pure noise on
+// every row; a real subnet keeps its prefix, where the length is the
+// information. Entries that do not parse are passed through untouched.
+func shortIPs(list string) string {
+	parts := strings.Split(list, ",")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		parts[i] = part
+		if pfx, err := netip.ParsePrefix(part); err == nil && pfx.Bits() == pfx.Addr().BitLen() {
+			parts[i] = pfx.Addr().String()
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 // initial returns the upper-cased first character of s (for avatar badges).

@@ -36,3 +36,20 @@ func TestExact(t *testing.T) {
 		t.Errorf("exact(...) = %q", got)
 	}
 }
+
+func TestShortIPs(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"10.0.0.7/32", "10.0.0.7"},
+		{"10.0.0.7/32, fd00::7/128", "10.0.0.7, fd00::7"},
+		{"10.0.0.0/24", "10.0.0.0/24"}, // a real subnet keeps its prefix
+		{"10.0.0.7/32, 192.168.1.0/24", "10.0.0.7, 192.168.1.0/24"},
+		{"10.0.0.7", "10.0.0.7"}, // bare address, no prefix to drop
+		{"(none)", "(none)"},     // unparseable: passed through
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := shortIPs(c.in); got != c.want {
+			t.Errorf("shortIPs(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

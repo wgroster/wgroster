@@ -79,11 +79,11 @@ func TestTemplatesExecute(t *testing.T) {
 		Extra:       1,
 		Series:      []int64{10, 50, 30, 80, 20, 60},
 		Peers: []peerStatus{
-			{Name: "laptop", Owner: "alice", Address: "10.0.0.5", State: statePeerOnline, RemoteEndpoint: "203.0.113.5:1234", HubAllowedIPs: "10.0.0.5/32", LastHandshake: time.Now(), RX: 1024, TX: 2048, RxRate: 1500, TxRate: 800},
-			{Name: "desktop", Owner: "alice", Address: "10.0.0.6", State: statePeerOffline, HubAllowedIPs: "10.0.0.99/32", AddrMismatch: true},
-			{Name: "tablet", Owner: "bob", Address: "10.0.0.7", State: statePeerUnlinked, HubAllowedIPs: "10.0.0.7/32"},
-			{Name: "phone", Owner: "bob", State: statePeerUnlinked, Pending: true, HubAllowedIPs: "10.0.0.8/32"},
-			{Name: "(unknown)", State: statePeerExtra, RemoteEndpoint: "198.51.100.7:51820", HubAllowedIPs: "10.0.0.200/32"},
+			{Name: "laptop", Owner: "Alice Adams", OwnerUID: "alice", HasPhoto: true, Address: "10.0.0.5", State: statePeerOnline, RemoteEndpoint: "203.0.113.5:1234", HubAllowedIPs: "10.0.0.5/32", LastHandshake: time.Now(), RX: 1024, TX: 2048, RxRate: 1500, TxRate: 800},
+			{Name: "desktop", Owner: "Alice Adams", OwnerUID: "alice", HasPhoto: true, SameOwnerAsPrev: true, Address: "10.0.0.6", State: statePeerOffline, HubAllowedIPs: "10.0.0.99/32", AddrMismatch: true},
+			{Name: "tablet", Owner: "bob", OwnerUID: "bob", Address: "10.0.0.7", State: statePeerUnlinked, HubAllowedIPs: "10.0.0.7/32"},
+			{Name: "phone", Owner: "bob", OwnerUID: "bob", SameOwnerAsPrev: true, State: statePeerUnlinked, Pending: true, HubAllowedIPs: "10.0.0.8/32"},
+			{Name: "(unknown)", PublicKey: "0BcD/eFgHiJkLmNoPqRsTuVwXyZ0123456789abcd=", State: statePeerExtra, RemoteEndpoint: "198.51.100.7:51820", HubAllowedIPs: "10.0.0.200/32"},
 		},
 	}}
 	if err := partialTmpls["status_table"].ExecuteTemplate(io.Discard, "status_table", summarize(statuses)); err != nil {
