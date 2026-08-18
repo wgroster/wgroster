@@ -108,7 +108,10 @@ registered in `render.go` (`fullPages` / `partials`). Template funcs (e.g.
   with `s.audit`.
 - **Tests**: `internal/web/integration_test.go` drives the real handler stack
   against a temp SQLite DB (`testServer` helper, local-admin session). Add
-  behavior tests there; store-level tests use `newTestStore`.
+  behavior tests there; store-level tests use `newTestStore`. LDAP tests run
+  against `internal/ldap/fakedir_test.go`, a minimal in-process LDAPv3 directory
+  (simple bind, base search, StartTLS) that records the DNs bound, filters sent
+  and attributes requested — assert on those rather than mocking the client.
 
 ## Verifying UI changes
 

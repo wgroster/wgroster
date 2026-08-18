@@ -3,6 +3,7 @@ module github.com/wgroster/wgroster
 go 1.26
 
 require (
+	github.com/go-asn1-ber/asn1-ber v1.5.8
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/oschwald/maxminddb-golang/v2 v2.5.0
 	golang.org/x/crypto v0.55.0
@@ -13,7 +14,6 @@ require (
 require (
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
