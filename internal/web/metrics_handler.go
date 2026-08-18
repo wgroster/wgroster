@@ -18,7 +18,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statuses, err := s.buildStatus()
+	statuses, err := s.status()
 	if err != nil {
 		s.serverError(w, err)
 		return

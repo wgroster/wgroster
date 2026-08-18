@@ -912,3 +912,46 @@ func TestCSPRestrictsFormAction(t *testing.T) {
 		t.Errorf("CSP is missing form-action 'self': %q", csp)
 	}
 }
+
+// The fleet status is the most expensive read in the portal and has three
+// concurrent consumers, so it is cached for a few seconds.
+func TestStatusCache(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+	})
+
+	first, err := srv.status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("got %d endpoints, want 1", len(first))
+	}
+
+	// A second endpoint appears, but the cached status is served as is.
+	if err := srv.store.CreateEndpoint(&store.Endpoint{
+		Name: "ams", PublicKey: key(3), HostPort: "ams:51820", UploadToken: "t",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cached, err := srv.status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cached) != 1 {
+		t.Errorf("got %d endpoints, want the cached 1", len(cached))
+	}
+
+	// Once the entry ages past the TTL it is rebuilt.
+	srv.statusMu.Lock()
+	srv.statusCachedAt = time.Now().Add(-statusCacheTTL - time.Second)
+	srv.statusMu.Unlock()
+	fresh, err := srv.status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fresh) != 2 {
+		t.Errorf("got %d endpoints after the TTL, want 2", len(fresh))
+	}
+}

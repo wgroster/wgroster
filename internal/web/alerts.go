@@ -46,7 +46,7 @@ type alertKey struct {
 }
 
 func (s *Server) evalAlerts(ctx context.Context, firing map[alertKey]string) {
-	statuses, err := s.buildStatus()
+	statuses, err := s.status()
 	if err != nil {
 		log.Printf("alerts: %v", err)
 		return

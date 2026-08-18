@@ -55,6 +55,29 @@ type endpointStatus struct {
 	Series      []int64 // recent total throughput (bytes/s) for the sparkline
 }
 
+// statusCacheTTL bounds how stale a served fleet status may be. buildStatus is
+// the most expensive read in the portal and has three concurrent consumers (the
+// status page poll, the alert evaluation, every /metrics scrape); the cache
+// collapses them without noticeably ageing a page that polls every 15s.
+const statusCacheTTL = 5 * time.Second
+
+// status returns the fleet status, rebuilding it at most once per
+// statusCacheTTL. Concurrent callers wait for a single rebuild rather than each
+// running their own. The returned statuses are shared: treat them as read-only.
+func (s *Server) status() ([]endpointStatus, error) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	if s.statusCache != nil && time.Since(s.statusCachedAt) < statusCacheTTL {
+		return s.statusCache, nil
+	}
+	built, err := s.buildStatus()
+	if err != nil {
+		return nil, err
+	}
+	s.statusCache, s.statusCachedAt = built, time.Now()
+	return built, nil
+}
+
 func (s *Server) buildStatus() ([]endpointStatus, error) {
 	endpoints, err := s.store.ListEndpoints()
 	if err != nil {
@@ -230,7 +253,7 @@ func (s *Server) handleAdminStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminStatusTable(w http.ResponseWriter, r *http.Request) {
-	statuses, err := s.buildStatus()
+	statuses, err := s.status()
 	if err != nil {
 		s.serverError(w, err)
 		return

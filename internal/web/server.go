@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/wgroster/wgroster/internal/auth"
 	"github.com/wgroster/wgroster/internal/config"
@@ -39,6 +40,10 @@ type Server struct {
 
 	profileMu       sync.Mutex      // guards profileInflight
 	profileInflight map[string]bool // uids being refreshed from LDAP right now
+
+	statusMu       sync.Mutex       // guards the fleet-status cache below
+	statusCache    []endpointStatus // last built fleet status (nil until built)
+	statusCachedAt time.Time
 }
 
 // New builds a Server and parses the embedded templates. version is the build
