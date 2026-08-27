@@ -194,7 +194,10 @@ systemctl enable --now wgroster-agent.timer
 
 - `WG_RECONCILE=0` (default) → **monitoring only** (push `wg show dump`).
 - `WG_RECONCILE=1` → also **reconcile**: pull the expected peers and apply them
-  locally with `wg set` (add/update/remove) so the hub matches wgroster.
+  locally with `wg syncconf` (add/update/remove in a single call, leaving the
+  sessions of unchanged peers alone) so the hub matches wgroster. An empty
+  answer from the portal is treated as a truncated response and skipped, so a
+  hiccup can never wipe the hub's peers.
 
 **Prefer the systemd timer over cron.** A failed `oneshot` run is recorded in
 the journal (`journalctl -u wgroster-agent`) and shows up in

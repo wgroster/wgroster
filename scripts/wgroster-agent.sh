@@ -4,8 +4,9 @@
 # It does two things, both driven from the concentrator — the portal never
 # connects to this host and never has write access to WireGuard:
 #   1. push:      send "wg show <iface> dump" to the portal (status/monitoring)
-#   2. reconcile: pull the expected peer list and apply it locally with "wg set"
-#                 (add/update/remove peers so the hub matches the portal)
+#   2. reconcile: pull the expected peer list and apply it locally with
+#                 "wg syncconf" (add/update/remove peers so the hub matches
+#                 the portal)
 #
 # Configure via environment (e.g. in the systemd unit):
 #   WG_PORTAL_URL    base URL, e.g. https://wgroster.example.com
@@ -30,21 +31,27 @@ wg show "$WG_IFACE" dump | curl -fsS --retry 3 --retry-connrefused \
     --retry-delay 5 --max-time 30 -H "$auth" --data-binary @- "$api/status"
 
 # 2. Optionally reconcile peers to match the portal's source of truth.
+#
+# "format=wg" already returns a peer-only file in "wg setconf" syntax, which is
+# exactly what syncconf consumes. syncconf applies the whole peer set in one
+# call — it adds new peers, updates AllowedIPs and removes peers that are no
+# longer expected, while leaving established sessions of unchanged peers alone
+# (unlike setconf, which tears them down). The [Interface] section is
+# deliberately not part of this: the portal knows neither the private key nor
+# the routes, and address/MTU changes need a wg-quick restart anyway.
 if [ "$WG_RECONCILE" = "1" ]; then
-    expected="$(curl -fsS --retry 3 --retry-connrefused --retry-delay 5 \
-        --max-time 30 -H "$auth" "$api/expected-peers?format=tsv")"
+    peers="$(mktemp)"
+    trap 'rm -f "$peers"' EXIT
 
-    # Remove peers present on the hub but no longer expected.
-    wg show "$WG_IFACE" peers | while read -r pub; do
-        [ -n "$pub" ] || continue
-        if ! printf '%s\n' "$expected" | grep -q "^$pub	"; then
-            wg set "$WG_IFACE" peer "$pub" remove
-        fi
-    done
+    curl -fsS --retry 3 --retry-connrefused --retry-delay 5 --max-time 30 \
+        -H "$auth" "$api/expected-peers?format=wg" > "$peers"
 
-    # Add/update expected peers (allowed-ips). Empty lines are skipped.
-    printf '%s\n' "$expected" | while IFS='	' read -r pub aips; do
-        [ -n "$pub" ] && [ -n "$aips" ] || continue
-        wg set "$WG_IFACE" peer "$pub" allowed-ips "$aips"
-    done
+    # An empty answer would make syncconf remove every peer on the hub. A hub
+    # with no expected peers at all is not worth that risk: treat it as a
+    # truncated response and leave the interface untouched.
+    if [ -s "$peers" ]; then
+        wg syncconf "$WG_IFACE" "$peers"
+    else
+        echo "wgroster-agent: empty peer list, leaving $WG_IFACE untouched" >&2
+    fi
 fi
