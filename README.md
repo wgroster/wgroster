@@ -132,6 +132,25 @@ internal/
   wg/      config gen + "wg show" parse   web/    handlers, templates, embedded assets
 ```
 
+## How does it compare to wg-portal?
+
+[wg-portal](https://github.com/h44z/wg-portal) is the reference project in this
+space and it is excellent — if it fits your needs, use it. The two tools solve
+different problems:
+
+| | wgroster | wg-portal |
+| --- | --- | --- |
+| Relationship to the servers | never connects to them; agents push status and pull the expected peer list | manages the interfaces directly (wgctrl, MikroTik, pfSense) |
+| Unit of management | a user's machine: one address, N endpoints | a WireGuard interface and its peers |
+| Private keys | never leave the client | generated and stored server-side, so configs can be emailed |
+| Fleet view | status dashboard, per-peer traffic history, drift detection | Prometheus metrics for Grafana |
+
+Pick wgroster if your concentrators are provisioned by something else (Ansible,
+an appliance, a team that owns them) and you need a roster plus an honest view
+of what each hub actually reports. Pick wg-portal if you want the portal itself
+to configure WireGuard, or if you need OAuth/passkeys, per-peer expiry, email
+delivery or a database other than SQLite.
+
 ## Configuration
 
 Copy `config.example.yaml` to `config.yaml` and adjust it. Key fields:
