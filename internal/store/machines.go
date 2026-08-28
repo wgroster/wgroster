@@ -28,9 +28,10 @@ func (s *Store) CreateMachine(m *Machine) error {
 	m.CreatedAt = time.Now()
 	m.Status = StatusPending
 	res, err := s.db.Exec(`
-		INSERT INTO machine (owner_uid, owner_name, name, public_key, address, status, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		m.OwnerUID, m.OwnerName, m.Name, m.PublicKey, "", StatusPending, m.CreatedAt.Unix())
+		INSERT INTO machine (owner_uid, owner_name, name, public_key, address, status, created_at, pending_since)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.OwnerUID, m.OwnerName, m.Name, m.PublicKey, "", StatusPending,
+		m.CreatedAt.Unix(), m.CreatedAt.Unix())
 	if err != nil {
 		return err
 	}
@@ -67,10 +68,18 @@ func (s *Store) CountPendingByOwner(uid string) (int, error) {
 	return n, err
 }
 
-// DeleteExpiredPending removes pending machines created before cutoff and
-// returns how many were deleted (frees their reserved address).
+// DeleteExpiredPending removes machines that have been awaiting review since
+// before cutoff, and returns how many were deleted (freeing their address).
+//
+// The age is taken from pending_since, not created_at: a machine that was
+// approved once and later sent back to pending (a key change, an offboarded
+// owner) would otherwise be deleted on the very next sweep, since it was
+// created long ago. Rows predating the column fall back to created_at.
 func (s *Store) DeleteExpiredPending(cutoff time.Time) (int64, error) {
-	res, err := s.db.Exec(`DELETE FROM machine WHERE status=? AND created_at < ?`,
+	res, err := s.db.Exec(`
+		DELETE FROM machine
+		WHERE status=?
+		  AND (CASE WHEN pending_since > 0 THEN pending_since ELSE created_at END) < ?`,
 		StatusPending, cutoff.Unix())
 	if err != nil {
 		return 0, err
@@ -79,11 +88,13 @@ func (s *Store) DeleteExpiredPending(cutoff time.Time) (int64, error) {
 }
 
 // SetMachinePending sends a machine back to pending (awaiting admin re-approval)
-// while keeping its address and endpoint links so re-approval is one click.
+// while keeping its address and endpoint links so re-approval is one click. The
+// review window restarts here, so pending retention gives the administrator the
+// full delay to act rather than counting from the machine's creation.
 func (s *Store) SetMachinePending(id int64) error {
 	_, err := s.db.Exec(
-		`UPDATE machine SET status=?, approved_at=NULL, approved_by='' WHERE id=?`,
-		StatusPending, id)
+		`UPDATE machine SET status=?, approved_at=NULL, approved_by='', pending_since=? WHERE id=?`,
+		StatusPending, time.Now().Unix(), id)
 	return err
 }
 

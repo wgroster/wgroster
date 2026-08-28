@@ -40,7 +40,12 @@ CREATE TABLE IF NOT EXISTS machine (
   created_at  INTEGER NOT NULL,
   approved_at INTEGER,
   approved_by TEXT NOT NULL DEFAULT '',
-  owner_name  TEXT NOT NULL DEFAULT ''
+  owner_name  TEXT NOT NULL DEFAULT '',
+  -- When the machine entered the review queue. Pending retention counts from
+  -- here rather than from created_at, so a machine sent back to pending long
+  -- after it was created gets a full review window instead of being swept on
+  -- the next pass.
+  pending_since INTEGER NOT NULL DEFAULT 0
 );
 
 -- An endpoint public key must be unique across the fleet.
@@ -163,6 +168,7 @@ func Open(path string) (*Store, error) {
 		`ALTER TABLE status_peer ADD COLUMN allowed_ips TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE machine ADD COLUMN approved_by TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE machine ADD COLUMN owner_name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE machine ADD COLUMN pending_since INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 			db.Close()
