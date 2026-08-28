@@ -411,3 +411,77 @@ func TestFakeDirectorySanity(t *testing.T) {
 		t.Fatalf("baseline login failed: %v", err)
 	}
 }
+
+func TestLookupPresencePresent(t *testing.T) {
+	d := seeded(t)
+	state, err := New(baseCfg(d)).LookupPresence("alice")
+	if err != nil || state != PresencePresent {
+		t.Fatalf("LookupPresence = %v, err %v, want PresencePresent", state, err)
+	}
+	// The check only needs to know the entry is there, so it must not drag a
+	// photo across the network: "1.1" is the OID for "no attributes".
+	searches := d.searchLog()
+	if len(searches) != 1 {
+		t.Fatalf("searches = %+v, want exactly one", searches)
+	}
+	if got := searches[0].attrs; len(got) != 1 || got[0] != "1.1" {
+		t.Errorf("requested attributes %v, want [1.1]", got)
+	}
+	if searches[0].base != aliceDN {
+		t.Errorf("searched %q, want %q", searches[0].base, aliceDN)
+	}
+}
+
+func TestLookupPresenceAbsent(t *testing.T) {
+	// Two ways a directory says "not here": no such object, and a successful
+	// search that returns no entry. Both are a real absence.
+	t.Run("no such object", func(t *testing.T) {
+		d := seeded(t)
+		state, err := New(baseCfg(d)).LookupPresence("ghost")
+		if err != nil || state != PresenceAbsent {
+			t.Fatalf("LookupPresence = %v, err %v, want PresenceAbsent", state, err)
+		}
+	})
+	t.Run("empty result", func(t *testing.T) {
+		d := seeded(t)
+		d.emptyFor[aliceDN] = true
+		state, err := New(baseCfg(d)).LookupPresence("alice")
+		if err != nil || state != PresenceAbsent {
+			t.Fatalf("LookupPresence = %v, err %v, want PresenceAbsent", state, err)
+		}
+	})
+}
+
+// A directory that cannot be reached or bound must never look like an absence:
+// the offboarding sweep would otherwise disable the fleet on an LDAP outage.
+func TestLookupPresenceUnknownOnFailure(t *testing.T) {
+	t.Run("unreachable", func(t *testing.T) {
+		cfg := config.LDAP{URL: closedPortURL(t), BindDNPattern: peoplePattern}
+		state, err := New(cfg).LookupPresence("alice")
+		if state != PresenceUnknown {
+			t.Errorf("LookupPresence = %v, want PresenceUnknown", state)
+		}
+		if err == nil {
+			t.Error("expected a dial error")
+		}
+	})
+	t.Run("service bind refused", func(t *testing.T) {
+		d := seeded(t)
+		cfg := baseCfg(d)
+		cfg.SearchBindDN = serviceDN
+		cfg.SearchBindPassword = "wrong"
+		state, err := New(cfg).LookupPresence("alice")
+		if state != PresenceUnknown {
+			t.Errorf("LookupPresence = %v, want PresenceUnknown", state)
+		}
+		if err == nil || !strings.Contains(err.Error(), "search bind") {
+			t.Errorf("err = %v, want it to name the search bind", err)
+		}
+	})
+	t.Run("not configured", func(t *testing.T) {
+		state, err := New(config.LDAP{}).LookupPresence("alice")
+		if state != PresenceUnknown || !errors.Is(err, ErrProfileUnavailable) {
+			t.Errorf("LookupPresence = %v, err %v, want PresenceUnknown / ErrProfileUnavailable", state, err)
+		}
+	})
+}

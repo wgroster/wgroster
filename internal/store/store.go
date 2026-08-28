@@ -122,6 +122,18 @@ CREATE TABLE IF NOT EXISTS user_profile (
   fetched_at   INTEGER NOT NULL DEFAULT 0
 );
 
+-- Result of the directory offboarding check, one row per machine owner. It is
+-- state, not a cache: misses counts consecutive "absent" answers so a single
+-- LDAP hiccup cannot orphan a user, and flagged_at records that the grace
+-- period has already been acted upon (so the action fires once, not daily).
+CREATE TABLE IF NOT EXISTS owner_check (
+  uid          TEXT PRIMARY KEY,
+  misses       INTEGER NOT NULL DEFAULT 0,
+  absent_since INTEGER NOT NULL DEFAULT 0,
+  flagged_at   INTEGER NOT NULL DEFAULT 0,
+  checked_at   INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS status_history (
   endpoint_id INTEGER NOT NULL REFERENCES endpoint(id) ON DELETE CASCADE,
   public_key  TEXT NOT NULL,

@@ -74,6 +74,21 @@ pending_expiry_days: 0
 # is append-only, so leave it at 0 only if you archive the database elsewhere.
 audit_retention_days: 0
 
+# Offboarding check (requires LDAP). Once a day the portal asks the directory
+# whether each machine owner still has an entry. An owner absent for this many
+# consecutive days is reported on the machines page, in the audit log and on the
+# alert webhook. 0 disables the check.
+orphan_grace_days: 0
+# What happens when the grace period expires:
+#   flag    — report only, machines keep working (default)
+#   disable — also send the owner's active machines back to pending, which drops
+#             them from every concentrator's expected peer list. Their address
+#             and endpoint links are kept, so re-approval is one click.
+# The check refuses to act on a round where no owner could be confirmed present,
+# or where a majority look absent — a broken search account or bind_dn_pattern
+# makes everyone look gone, and that must not disconnect the fleet.
+orphan_action: "flag"
+
 # LDAP is optional when local_admin is configured.
 ldap:
   # OpenLDAP server URL.

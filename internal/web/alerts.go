@@ -12,9 +12,10 @@ import (
 
 // alertPayload is POSTed to the configured webhook on a state transition.
 type alertPayload struct {
-	Endpoint string `json:"endpoint"`
-	Type     string `json:"type"`   // stale | missing | unlinked | unexpected | mismatch
-	Status   string `json:"status"` // firing | resolved
+	Endpoint string `json:"endpoint,omitempty"`
+	User     string `json:"user,omitempty"` // set for user-scoped alerts (orphan)
+	Type     string `json:"type"`           // stale | missing | unlinked | unexpected | mismatch | orphan
+	Status   string `json:"status"`         // firing | resolved
 	Detail   string `json:"detail"`
 	Time     string `json:"time"`
 }
@@ -42,7 +43,8 @@ func (s *Server) RunAlerts(ctx context.Context) {
 // alertKey identifies one alert: a condition type on a given endpoint.
 type alertKey struct {
 	endpoint string
-	typ      string // stale | missing | unlinked | unexpected | mismatch
+	typ      string // stale | missing | unlinked | unexpected | mismatch | orphan
+	user     string // set instead of endpoint for user-scoped alerts (orphan)
 }
 
 func (s *Server) evalAlerts(ctx context.Context, firing map[alertKey]string) {
@@ -53,7 +55,7 @@ func (s *Server) evalAlerts(ctx context.Context, firing map[alertKey]string) {
 	}
 
 	current := map[alertKey]string{}
-	add := func(name, typ, detail string) { current[alertKey{name, typ}] = detail }
+	add := func(name, typ, detail string) { current[alertKey{endpoint: name, typ: typ}] = detail }
 	for _, es := range statuses {
 		if es.HasReport && !es.ReportFresh {
 			add(es.E.Name, "stale", fmt.Sprintf("no report for %s", ago(es.LastReport)))
@@ -95,8 +97,13 @@ func (s *Server) evalAlerts(ctx context.Context, firing map[alertKey]string) {
 }
 
 func (s *Server) postAlert(ctx context.Context, key alertKey, status, detail string) {
+	// Callers outside RunAlerts (the offboarding sweep) reach this without
+	// having checked that a webhook is configured.
+	if s.cfg.AlertWebhookURL == "" {
+		return
+	}
 	body, _ := json.Marshal(alertPayload{
-		Endpoint: key.endpoint, Type: key.typ, Status: status, Detail: detail,
+		Endpoint: key.endpoint, User: key.user, Type: key.typ, Status: status, Detail: detail,
 		Time: time.Now().Format(time.RFC3339),
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.AlertWebhookURL, bytes.NewReader(body))

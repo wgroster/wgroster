@@ -71,11 +71,15 @@
       <span class="h-9 w-9 shrink-0 rounded-full bg-slate-900 text-white grid place-items-center text-sm font-semibold">{{initial $g.Name}}</span>
     {{end}}
     <div class="min-w-0">
-      <div class="font-medium text-slate-900 dark:text-slate-100 truncate">{{$g.Name}}{{if ne $g.Name $g.UID}} <span class="text-xs font-normal text-slate-400 dark:text-slate-500">{{$g.UID}}</span>{{end}}</div>
+      <div class="font-medium text-slate-900 dark:text-slate-100 truncate">{{$g.Name}}{{if ne $g.Name $g.UID}} <span class="text-xs font-normal text-slate-400 dark:text-slate-500">{{$g.UID}}</span>{{end}}{{if $g.Orphaned}}
+        <span class="align-middle text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5 cursor-help"
+              title="This account is no longer in the directory{{if not $g.AbsentSince.IsZero}} (first seen missing {{ago $g.AbsentSince}}){{end}}">Not in directory</span>
+      {{end}}</div>
       <div class="text-xs text-slate-500 dark:text-slate-400">
         {{$g.Total}} machine{{if gt $g.Total 1}}s{{end}}
         · <span class="text-emerald-600">{{$g.OnlineN}} online</span>
         {{if $g.PendingN}} · <span class="text-amber-600">{{$g.PendingN}} pending</span>{{end}}
+        {{if $g.Orphaned}} · <span class="text-red-600">owner offboarded</span>{{end}}
       </div>
     </div>
   </header>

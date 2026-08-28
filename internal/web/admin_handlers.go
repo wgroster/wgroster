@@ -79,6 +79,10 @@ type userGroup struct {
 	Total    int
 	OnlineN  int
 	PendingN int
+	// Orphaned reports that the directory no longer knows this owner and the
+	// grace period has expired; AbsentSince is when the first absence was seen.
+	Orphaned    bool
+	AbsentSince time.Time
 }
 
 func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +111,11 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profiles, err := s.store.AllUserProfileMetas()
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	ownerChecks, err := s.store.OwnerChecks()
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -186,6 +195,10 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 				g.Name = p.DisplayName
 			}
 			g.HasPhoto = p.HasPhoto
+		}
+		if c, found := ownerChecks[uid]; found && c.Orphaned() {
+			g.Orphaned = true
+			g.AbsentSince = c.AbsentSince
 		}
 		totalPending += g.PendingN
 		groups = append(groups, g)

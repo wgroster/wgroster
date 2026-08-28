@@ -127,6 +127,63 @@ func (a *Authenticator) LookupProfile(uid string) (name string, photo []byte, er
 	return a.lookupProfile(conn, userDN)
 }
 
+// Presence is the outcome of a directory existence check for a user.
+type Presence int
+
+const (
+	// PresenceUnknown means the directory could not answer: LDAP is not
+	// configured, the server is unreachable, or the bind was refused. It is
+	// never evidence that the user is gone — callers must treat it as "no new
+	// information" rather than as an absence.
+	PresenceUnknown Presence = iota
+	// PresencePresent means the user's entry was found.
+	PresencePresent
+	// PresenceAbsent means the directory answered and the entry is not there.
+	PresenceAbsent
+)
+
+// LookupPresence reports whether uid still has an entry in the directory. It is
+// the offboarding check: a user removed from the directory should not keep a
+// working VPN peer.
+//
+// The distinction between "answered, not there" and "could not ask" is the
+// whole point of the method, so the three cases are kept apart deliberately: a
+// directory outage, a revoked service account or a directory that stopped
+// allowing anonymous reads all yield PresenceUnknown, never PresenceAbsent.
+func (a *Authenticator) LookupPresence(uid string) (Presence, error) {
+	if !a.cfg.Configured() {
+		return PresenceUnknown, ErrProfileUnavailable
+	}
+	conn, err := a.dial()
+	if err != nil {
+		return PresenceUnknown, err
+	}
+	defer conn.Close()
+	if a.cfg.SearchBindDN != "" {
+		if err := conn.Bind(a.cfg.SearchBindDN, a.cfg.SearchBindPassword); err != nil {
+			return PresenceUnknown, fmt.Errorf("ldap search bind: %w", err)
+		}
+	}
+	userDN := fmt.Sprintf(a.cfg.BindDNPattern, ldap.EscapeDN(uid))
+	// "1.1" is the OID for "no attributes": we only care whether the entry is
+	// there, so there is no reason to pull a photo across the network.
+	req := ldap.NewSearchRequest(
+		userDN, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 0, false,
+		"(objectClass=*)", []string{"1.1"}, nil,
+	)
+	res, err := conn.Search(req)
+	if err != nil {
+		if ldap.IsErrorWithCode(err, ldap.LDAPResultNoSuchObject) {
+			return PresenceAbsent, nil
+		}
+		return PresenceUnknown, fmt.Errorf("ldap presence search: %w", err)
+	}
+	if len(res.Entries) == 0 {
+		return PresenceAbsent, nil
+	}
+	return PresencePresent, nil
+}
+
 // lookupProfile reads the user's display-name (cn by default) and photo
 // (jpegPhoto by default) attributes with a base-scoped search on the user DN.
 // A search transport error is returned so callers can avoid caching an empty

@@ -78,6 +78,29 @@ type Config struct {
 	// AuditRetentionDays prunes audit entries older than N days (0 = keep
 	// forever). The audit log is append-only, so without this it grows unbounded.
 	AuditRetentionDays int `yaml:"audit_retention_days"`
+
+	// OrphanGraceDays enables the directory offboarding check: an owner whose
+	// account the directory no longer knows is flagged once it has been absent
+	// for N consecutive daily checks (0 = check disabled). Requires LDAP.
+	OrphanGraceDays int `yaml:"orphan_grace_days"`
+	// OrphanAction is what happens when the grace period expires: "flag" (the
+	// default) only records and reports it, "disable" also sends the owner's
+	// active machines back to pending, which drops them from the expected peer
+	// list on every concentrator. Re-approval is one click either way.
+	OrphanAction string `yaml:"orphan_action"`
+}
+
+// Orphan action values for OrphanAction.
+const (
+	// OrphanFlag reports an offboarded owner without touching their machines.
+	OrphanFlag = "flag"
+	// OrphanDisable additionally sends their active machines back to pending.
+	OrphanDisable = "disable"
+)
+
+// OrphanCheckEnabled reports whether the directory offboarding check should run.
+func (c *Config) OrphanCheckEnabled() bool {
+	return c.OrphanGraceDays > 0 && c.LDAP.Configured()
 }
 
 // LocalAdmin is a built-in administrator account checked before LDAP.
@@ -224,6 +247,21 @@ func Load(path string) (*Config, error) {
 	}
 	if c.AuditRetentionDays < 0 {
 		return nil, fmt.Errorf("audit_retention_days must not be negative")
+	}
+
+	if c.OrphanGraceDays < 0 {
+		return nil, fmt.Errorf("orphan_grace_days must not be negative")
+	}
+	if c.OrphanAction == "" {
+		c.OrphanAction = OrphanFlag
+	}
+	if c.OrphanAction != OrphanFlag && c.OrphanAction != OrphanDisable {
+		return nil, fmt.Errorf("invalid orphan_action %q: use %q or %q", c.OrphanAction, OrphanFlag, OrphanDisable)
+	}
+	// The check asks the directory whether a uid still exists, so it cannot run
+	// without one. Fail loudly rather than silently never running.
+	if c.OrphanGraceDays > 0 && !c.LDAP.Configured() {
+		return nil, fmt.Errorf("orphan_grace_days requires LDAP (ldap.url + ldap.bind_dn_pattern)")
 	}
 	return c, nil
 }

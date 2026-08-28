@@ -187,3 +187,56 @@ ldap:
 		t.Errorf("expected LDAP-only auth, got %+v / %+v", c.LDAP, c.LocalAdmin)
 	}
 }
+
+func TestOrphanCheckDefaults(t *testing.T) {
+	c, err := load(t, minimal)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.OrphanAction != OrphanFlag {
+		t.Errorf("orphan_action = %q, want %q by default", c.OrphanAction, OrphanFlag)
+	}
+	// Off unless a grace period is set: the check must never start on its own.
+	if c.OrphanCheckEnabled() {
+		t.Error("the offboarding check is enabled without orphan_grace_days")
+	}
+}
+
+func TestOrphanCheckRequiresLDAP(t *testing.T) {
+	// The check asks the directory whether a uid still exists, so local_admin
+	// alone cannot answer it. Fail loudly rather than never run.
+	_, err := load(t, minimal+"\norphan_grace_days: 7\n")
+	if err == nil || !strings.Contains(err.Error(), "requires LDAP") {
+		t.Fatalf("err = %v, want it to say LDAP is required", err)
+	}
+}
+
+func TestOrphanCheckEnabledWithLDAP(t *testing.T) {
+	c, err := load(t, minimal+`
+orphan_grace_days: 7
+orphan_action: disable
+ldap:
+  url: "ldap://ldap.example.com:389"
+  bind_dn_pattern: "uid=%s,ou=people,dc=example,dc=com"
+`)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !c.OrphanCheckEnabled() || c.OrphanAction != OrphanDisable {
+		t.Errorf("enabled %v, action %q", c.OrphanCheckEnabled(), c.OrphanAction)
+	}
+}
+
+func TestOrphanActionRejectsUnknownValue(t *testing.T) {
+	_, err := load(t, minimal+"\norphan_action: delete\n")
+	if err == nil || !strings.Contains(err.Error(), "invalid orphan_action") {
+		t.Fatalf("err = %v, want an invalid orphan_action error", err)
+	}
+}
+
+func TestOrphanGraceDaysRejectsNegative(t *testing.T) {
+	_, err := load(t, minimal+"\norphan_grace_days: -1\n")
+	if err == nil || !strings.Contains(err.Error(), "orphan_grace_days") {
+		t.Fatalf("err = %v, want an orphan_grace_days error", err)
+	}
+}

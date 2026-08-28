@@ -50,6 +50,13 @@ concentrator).
 - Exposes the **expected peer list** (`wg` / `tsv` / `json`) so external tooling
   (or the bundled agent) can reconcile the servers.
 
+**Offboarding**
+- Once a day the portal asks the directory whether every machine owner still
+  exists. An account that stays gone for `orphan_grace_days` is flagged on the
+  machines page, in the audit log and on the alert webhook — and, with
+  `orphan_action: disable`, its machines drop out of every concentrator's
+  expected peer list.
+
 **Observability**
 - Live **status dashboard** (auto-refresh) with per-peer **throughput**.
 - Click a peer for a **detail drawer**: rx/tx **traffic curves** (14-day
@@ -164,6 +171,8 @@ Copy `config.example.yaml` to `config.yaml` and adjust it. Key fields:
   optional when it is set.
 - `audit_retention_days` — prune admin audit entries older than N days
   (0 = keep forever).
+- `orphan_grace_days`, `orphan_action` — directory offboarding check
+  (0 = off); see [Offboarding](#offboarding).
 - `metrics_token`, `alert_webhook_url`, `geoip_db` / `geoip_asn_db`,
   `cookie_secure`, `trusted_proxy` — see the sections below.
 
@@ -258,6 +267,45 @@ curl -s -H "Authorization: Bearer <TOKEN>" \
 
 Then fill in the private key and `wg-quick up wg0`.
 
+## Offboarding
+
+The portal is the source of truth for *who* gets a config, so an account that
+disappears from the directory must not leave a working peer behind. With
+`orphan_grace_days` set (LDAP required), the hourly maintenance sweep asks the
+directory once a day whether each machine owner still has an entry:
+
+```yaml
+orphan_grace_days: 7      # consecutive days absent before acting
+orphan_action: "flag"     # flag (report only) | disable (send machines back to pending)
+```
+
+- **flag** (default) — the owner gets a *Not in directory* badge on the machines
+  page, an `owner.orphaned` entry in the audit log and an alert webhook. Nothing
+  else changes: you decide what to do.
+- **disable** — additionally sends the owner's active machines back to
+  **pending**, which removes them from `expected-peers` on every concentrator
+  (the agent then drops the peer on its next run). The address and endpoint
+  links are kept, so if the account comes back it is one click to re-approve.
+
+The failure mode that matters here is the *false* positive, so the check is
+built to fail safe:
+
+- an absence only counts when the directory actually answered — an unreachable
+  server, a refused bind or a revoked service account is "no information", never
+  a departure;
+- it takes `orphan_grace_days` consecutive daily answers, and one presence
+  resets the counter (a re-created account recovers on its own);
+- a round where **no owner at all could be confirmed present**, or where a
+  **majority** look absent, is refused outright and logged: a wrong
+  `bind_dn_pattern`, a revoked search account or a directory that stopped
+  allowing anonymous reads makes everyone look gone, and that must not
+  disconnect the fleet. A portal with a single machine owner therefore never
+  flags — there is no second owner to corroborate the directory.
+
+Machines sent back to pending are subject to `pending_expiry_days` like any
+other, counted from the moment they entered the queue (not from their creation),
+so you get the full review window before the address is freed.
+
 ## Monitoring & alerting
 
 The **Status** page shows per-peer throughput and drift. Click a peer for the
@@ -292,8 +340,12 @@ An optional **alert webhook** (`alert_webhook_url`) is POSTed on transitions:
 {"endpoint":"paris","type":"missing","status":"firing","detail":"2 peer(s) missing on hub","time":"2026-06-04T08:00:00Z"}
 ```
 
-`type`: `stale | missing | unlinked | unexpected | mismatch`; `status`:
-`firing | resolved`.
+`type`: `stale | missing | unlinked | unexpected | mismatch | orphan`; `status`:
+`firing | resolved`. An `orphan` alert carries `user` instead of `endpoint`:
+
+```json
+{"user":"jdoe","type":"orphan","status":"firing","detail":"owner \"jdoe\" is no longer in the directory (2 machine(s) sent back to pending)","time":"2026-08-28T08:00:00Z"}
+```
 Every admin action is recorded on the **Audit** page (`/admin/audit`).
 
 ## Security & production checklist
@@ -305,6 +357,7 @@ Every admin action is recorded on the **Audit** page (`/admin/audit`).
 - [ ] `trusted_proxy: true` **only** behind a proxy that overwrites
       `X-Forwarded-For` (correct client IPs and login rate-limiting).
 - [ ] Set `metrics_token` for Prometheus.
+- [ ] Set `orphan_grace_days` so departed accounts stop being valid peers.
 - [ ] Back up the SQLite database.
 
 Reverse proxy examples — Caddy:
