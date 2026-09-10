@@ -1012,6 +1012,79 @@ func TestDashboardListFragment(t *testing.T) {
 	}
 }
 
+// TestAdminMachineConfig covers the admin route to any machine's config: the
+// machines list offers it per row, the page renders for a machine the admin does
+// not own (without the private-key helpers, which only make sense on the device)
+// and the download still hands out the template.
+func TestAdminMachineConfig(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)},
+		"host_port": {"vpn-par:51820"}, "allowed_ips": {"192.168.1.0/24"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: got %d (%s)", w.Code, w.Body)
+	}
+	eps, _ := srv.store.ListEndpoints()
+	ep := eps[0]
+
+	// The session is "admin"; this machine belongs to bob.
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"bob"}, "name": {"laptop"},
+		"public_key": {key(1)}, "address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+	machines, _ := srv.store.ListMachines()
+	if len(machines) != 1 {
+		t.Fatalf("expected 1 machine, got %d", len(machines))
+	}
+	mID := machines[0].ID
+
+	list := do(t, h, "GET", "/admin/machines", cookies, nil)
+	if list.Code != http.StatusOK {
+		t.Fatalf("machines page: got %d", list.Code)
+	}
+	if want := fmt.Sprintf(`href="/machines/%d/config"`, mID); !strings.Contains(list.Body.String(), want) {
+		t.Errorf("machines page has no config link (%s)", want)
+	}
+	page := do(t, h, "GET", fmt.Sprintf("/machines/%d/config", mID), cookies, nil)
+	if page.Code != http.StatusOK {
+		t.Fatalf("config page for another owner: got %d", page.Code)
+	}
+	body := page.Body.String()
+	for _, want := range []string{"owned by bob", "Address = 10.0.0.5/32", "Download template"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("config page missing %q", want)
+		}
+	}
+	if strings.Contains(body, `id="privkey"`) {
+		t.Error("the private-key/QR helpers must be hidden on someone else's machine")
+	}
+
+	dl := do(t, h, "GET", fmt.Sprintf("/machines/%d/config?download=1", mID), cookies, nil)
+	if dl.Code != http.StatusOK {
+		t.Fatalf("config download: got %d", dl.Code)
+	}
+	if cd := dl.Header().Get("Content-Disposition"); !strings.Contains(cd, `filename="laptop.conf"`) {
+		t.Errorf("unexpected Content-Disposition %q", cd)
+	}
+	if !strings.Contains(dl.Body.String(), "PrivateKey = <YOUR_PRIVATE_KEY>") {
+		t.Errorf("downloaded config should keep the private-key placeholder:\n%s", dl.Body.String())
+	}
+
+	// A non-admin still cannot reach someone else's machine.
+	rec := httptest.NewRecorder()
+	if _, err := srv.sess.Issue(rec, "carol", "", false, false); err != nil {
+		t.Fatal(err)
+	}
+	if other := do(t, h, "GET", fmt.Sprintf("/machines/%d/config", mID), rec.Result().Cookies(), nil); other.Code != http.StatusForbidden {
+		t.Errorf("non-admin access: got %d, want 403", other.Code)
+	}
+}
+
 // TestAdminMachinesListDisinherits guards the peer drawer against htmx attribute
 // inheritance. The machine list refreshes itself with hx-select/hx-swap, and
 // htmx passes both down to every descendant — including the per-row buttons that

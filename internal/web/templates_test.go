@@ -30,7 +30,8 @@ func TestTemplatesExecute(t *testing.T) {
 		"machine_config": struct {
 			Machine *store.Machine
 			Config  string
-		}{m, "config text"},
+			Foreign bool
+		}{m, "config text", false},
 		"admin_machines": struct {
 			Groups       []*userGroup
 			AllEndpoints []*store.Endpoint

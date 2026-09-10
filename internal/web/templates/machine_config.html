@@ -1,7 +1,10 @@
 {{define "content"}}
 <div class="flex items-center justify-between mb-6">
-  <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{{.Data.Machine.Name}}</h1>
-  <a href="/" class="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white">← Back</a>
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{{.Data.Machine.Name}}</h1>
+    {{if .Data.Foreign}}<p class="text-sm text-slate-500 dark:text-slate-400">owned by {{.Data.Machine.OwnerDisplay}}</p>{{end}}
+  </div>
+  <a href="{{if .Data.Foreign}}/admin/machines{{else}}/{{end}}" class="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white">← Back</a>
 </div>
 
 <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 mb-6">
@@ -15,12 +18,15 @@
     </div>
   </div>
   <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
-    Replace <code class="font-mono">&lt;YOUR_PRIVATE_KEY&gt;</code> with the private key generated on this machine,
-    then save the file as <code class="font-mono">wg0.conf</code> and run <code class="font-mono">wg-quick up wg0</code>.
+    {{if .Data.Foreign}}The portal never stores a private key, so
+    <code class="font-mono">&lt;YOUR_PRIVATE_KEY&gt;</code> stays a placeholder: only the machine's own
+    private key completes this file.{{else}}Replace <code class="font-mono">&lt;YOUR_PRIVATE_KEY&gt;</code> with the private key generated on this machine,
+    then save the file as <code class="font-mono">wg0.conf</code> and run <code class="font-mono">wg-quick up wg0</code>.{{end}}
   </p>
   <pre id="conf" class="bg-slate-900 text-slate-100 text-sm rounded-lg p-4 overflow-x-auto whitespace-pre">{{.Data.Config}}</pre>
 </div>
 
+{{if not .Data.Foreign}}
 <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-6">
   <h2 class="font-medium text-slate-900 dark:text-slate-100 mb-1">Mobile setup (QR code)</h2>
   <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
@@ -42,4 +48,5 @@
 </div>
 
 <script src="/static/qrcode.min.js?v={{.AssetV}}" defer></script>
+{{end}}
 {{end}}

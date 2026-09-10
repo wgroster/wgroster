@@ -149,10 +149,15 @@ func (s *Server) handleMachineConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// An administrator may pull any machine's config (the portal holds no
+	// private key, so what it hands out is the template either way). Viewing
+	// someone else's machine drops the private-key/QR helpers, which only make
+	// sense on the device itself.
 	s.render(w, r, "machine_config", "Configuration — "+m.Name, "dashboard", struct {
 		Machine *store.Machine
 		Config  string
-	}{m, conf})
+		Foreign bool
+	}{m, conf, m.OwnerUID != sess.UID})
 }
 
 // handleEditMachine lets a user edit their own machine's name and public key.
