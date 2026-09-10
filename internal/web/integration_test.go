@@ -1011,3 +1011,43 @@ func TestDashboardListFragment(t *testing.T) {
 		t.Error("the fragment is reachable without a session")
 	}
 }
+
+// TestAdminMachinesListDisinherits guards the peer drawer against htmx attribute
+// inheritance. The machine list refreshes itself with hx-select/hx-swap, and
+// htmx passes both down to every descendant — including the per-row buttons that
+// load the drawer. Inherited, hx-select="#m-list" matches nothing in the drawer
+// fragment and hx-swap="outerHTML" then replaces the drawer body with nothing,
+// so clicking "Status" opened an empty white panel.
+func TestAdminMachinesListDisinherits(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)},
+		"host_port": {"vpn-par:51820"}, "allowed_ips": {"192.168.1.0/24"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: got %d (%s)", w.Code, w.Body)
+	}
+	eps, _ := srv.store.ListEndpoints()
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"bob"}, "name": {"laptop"},
+		"public_key": {key(1)}, "address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(eps[0].ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+
+	page := do(t, h, "GET", "/admin/machines", cookies, nil)
+	if page.Code != http.StatusOK {
+		t.Fatalf("machines page: got %d", page.Code)
+	}
+	body := page.Body.String()
+	// The row button that loads the drawer must exist, or this test proves nothing.
+	if !strings.Contains(body, `hx-target="#peer-drawer-body"`) {
+		t.Fatal("no peer-drawer button on the machines page")
+	}
+	list := body[strings.Index(body, `id="m-list"`):]
+	if !strings.Contains(list[:strings.Index(list, ">")], `hx-disinherit="*"`) {
+		t.Error(`#m-list must carry hx-disinherit="*" so its swap attributes do not reach the drawer buttons`)
+	}
+}
