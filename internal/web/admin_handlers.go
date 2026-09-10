@@ -247,7 +247,8 @@ func (s *Server) handleAdminCreateMachine(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	m := &store.Machine{OwnerUID: owner, Name: name, PublicKey: pubKey}
+	m := &store.Machine{OwnerUID: owner, Name: name, PublicKey: pubKey,
+		Icon: store.NormalizeIcon(r.FormValue("icon"))}
 	if err := s.store.CreateMachine(m); err != nil {
 		redirectMsg(w, r, "/admin/machines", "err", "Could not create machine (public key already used?)")
 		return
@@ -260,7 +261,7 @@ func (s *Server) handleAdminCreateMachine(w http.ResponseWriter, r *http.Request
 	redirectMsg(w, r, "/admin/machines", "ok", "Machine "+name+" created for "+owner+" ("+address+")")
 }
 
-// handleUpdateMachine edits a machine (name, public key, address, endpoints)
+// handleUpdateMachine edits a machine (name, icon, public key, address, endpoints)
 // and activates it. Used both to approve a pending machine and to edit an
 // active one.
 func (s *Server) handleUpdateMachine(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +306,7 @@ func (s *Server) handleUpdateMachine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.UpdateMachineIdentity(id, name, pubKey); err != nil {
+	if err := s.store.UpdateMachineIdentity(id, name, pubKey, r.FormValue("icon")); err != nil {
 		redirectMsg(w, r, "/admin/machines", "err", "Could not save (public key already used?)")
 		return
 	}

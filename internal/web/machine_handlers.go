@@ -101,7 +101,8 @@ func (s *Server) handleAddMachine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := &store.Machine{OwnerUID: sess.UID, OwnerName: sess.Name, Name: name, PublicKey: pubKey}
+	m := &store.Machine{OwnerUID: sess.UID, OwnerName: sess.Name, Name: name, PublicKey: pubKey,
+		Icon: store.NormalizeIcon(r.FormValue("icon"))}
 	if err := s.store.CreateMachine(m); err != nil {
 		// Most likely a duplicate public key.
 		redirectMsg(w, r, "/", "err", "Could not add machine (key already used?)")
@@ -160,7 +161,8 @@ func (s *Server) handleMachineConfig(w http.ResponseWriter, r *http.Request) {
 	}{m, conf, m.OwnerUID != sess.UID})
 }
 
-// handleEditMachine lets a user edit their own machine's name and public key.
+// handleEditMachine lets a user edit their own machine's name, icon and public
+// key.
 // Address and endpoints stay admin-controlled and are never touched here.
 // Changing the public key sends the machine back to pending (admin re-approval).
 func (s *Server) handleEditMachine(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +194,7 @@ func (s *Server) handleEditMachine(w http.ResponseWriter, r *http.Request) {
 	}
 
 	keyChanged := pubKey != m.PublicKey
-	if err := s.store.UpdateMachineIdentity(id, name, pubKey); err != nil {
+	if err := s.store.UpdateMachineIdentity(id, name, pubKey, r.FormValue("icon")); err != nil {
 		redirectMsg(w, r, "/", "err", "Could not save (public key already used?)")
 		return
 	}

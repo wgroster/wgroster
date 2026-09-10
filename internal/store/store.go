@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS machine (
   approved_at INTEGER,
   approved_by TEXT NOT NULL DEFAULT '',
   owner_name  TEXT NOT NULL DEFAULT '',
+  icon        TEXT NOT NULL DEFAULT 'desktop',
   -- When the machine entered the review queue. Pending retention counts from
   -- here rather than from created_at, so a machine sent back to pending long
   -- after it was created gets a full review window instead of being swept on
@@ -181,6 +182,7 @@ func Open(path string) (*Store, error) {
 		`ALTER TABLE machine ADD COLUMN approved_by TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE machine ADD COLUMN owner_name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE machine ADD COLUMN pending_since INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE machine ADD COLUMN icon TEXT NOT NULL DEFAULT 'desktop'`,
 	} {
 		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 			db.Close()

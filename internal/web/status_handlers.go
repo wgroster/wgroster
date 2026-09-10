@@ -29,6 +29,7 @@ type peerStatus struct {
 	HasPhoto        bool   // a directory photo is cached (served at /avatar/{uid})
 	SameOwnerAsPrev bool   // previous row has the same owner: name and avatar are printed once per run
 	PublicKey       string
+	Icon            string // device icon; empty for a key no machine claims
 	Address         string // address assigned by the portal
 	State           string
 	Pending         bool   // known machine still awaiting approval (unlinked only)
@@ -139,6 +140,7 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 			ps := peerStatus{
 				Name:      m.Name,
 				PublicKey: m.PublicKey,
+				Icon:      m.Icon,
 				Address:   m.Address,
 			}
 			setOwner(&ps, m)
@@ -180,6 +182,7 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 			}
 			if m, err := s.store.MachineByPublicKey(p.PublicKey); err == nil {
 				ps.Name = m.Name
+				ps.Icon = m.Icon
 				ps.Address = m.Address
 				setOwner(&ps, m)
 				ps.AddrMismatch = m.Address != "" && p.AllowedIPs != "" && !allowedCovers(p.AllowedIPs, m.Address)

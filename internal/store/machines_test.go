@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -68,5 +69,78 @@ func TestDeleteExpiredPendingFallsBackToCreatedAt(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("deleted %d machine(s), want 1", n)
+	}
+}
+
+// The icon set is closed: whatever a form submits, what lands in the database is
+// always one of MachineIcons, so every renderer can look it up blindly.
+func TestMachineIconIsAlwaysFromTheKnownSet(t *testing.T) {
+	s := newTestStore(t)
+
+	cases := map[string]string{
+		"laptop":             "laptop",
+		"server":             "server",
+		"":                   DefaultMachineIcon, // no choice made
+		"nas":                DefaultMachineIcon, // not in the set
+		"<script>x</script>": DefaultMachineIcon,
+	}
+	i := 0
+	for submitted, want := range cases {
+		i++
+		m := &Machine{OwnerUID: "alice", Name: "m", PublicKey: fmt.Sprintf("k-%d", i), Icon: submitted}
+		if err := s.CreateMachine(m); err != nil {
+			t.Fatal(err)
+		}
+		if m.Icon != want {
+			t.Errorf("CreateMachine(%q): in-memory icon %q, want %q", submitted, m.Icon, want)
+		}
+		got, err := s.GetMachine(m.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Icon != want {
+			t.Errorf("CreateMachine(%q): stored icon %q, want %q", submitted, got.Icon, want)
+		}
+
+		if err := s.UpdateMachineIdentity(m.ID, "m", got.PublicKey, submitted); err != nil {
+			t.Fatal(err)
+		}
+		if got, err = s.GetMachine(m.ID); err != nil {
+			t.Fatal(err)
+		}
+		if got.Icon != want {
+			t.Errorf("UpdateMachineIdentity(%q): stored icon %q, want %q", submitted, got.Icon, want)
+		}
+	}
+}
+
+// A database written by a version without the icon column must migrate, and its
+// existing machines must come back carrying the default icon rather than an
+// empty string. Dropping the column reproduces that older shape.
+func TestMachineIconMigratesExistingDatabase(t *testing.T) {
+	path := t.TempDir() + "/legacy.db"
+	old, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := machineFor(t, old, "alice", "laptop", "k-legacy")
+	if _, err := old.db.Exec(`ALTER TABLE machine DROP COLUMN icon`); err != nil {
+		t.Fatalf("simulate a pre-icon database: %v", err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen (migration): %v", err)
+	}
+	defer s.Close()
+	got, err := s.GetMachine(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Icon != DefaultMachineIcon {
+		t.Errorf("migrated machine icon %q, want %q", got.Icon, DefaultMachineIcon)
 	}
 }

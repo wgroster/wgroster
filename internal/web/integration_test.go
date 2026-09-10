@@ -1124,3 +1124,150 @@ func TestAdminMachinesListDisinherits(t *testing.T) {
 		t.Error(`#m-list must carry hx-disinherit="*" so its swap attributes do not reach the drawer buttons`)
 	}
 }
+
+// TestMachineIconRoundTrip drives the icon through the handlers that write it:
+// the admin create form, the admin edit form and a user editing their own
+// machine. Anything outside the known set falls back to the default rather than
+// being refused.
+func TestMachineIconRoundTrip(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)},
+		"host_port": {"vpn-par:51820"}, "allowed_ips": {"192.168.1.0/24"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: got %d (%s)", w.Code, w.Body)
+	}
+	eps, _ := srv.store.ListEndpoints()
+	epID := fmt.Sprint(eps[0].ID)
+
+	// The session is "admin", so this machine is also editable as its owner.
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"admin"}, "name": {"laptop"}, "icon": {"laptop"},
+		"public_key": {key(1)}, "address": {"10.0.0.5"}, "endpoint_ids": {epID},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+	machines, _ := srv.store.ListMachines()
+	if len(machines) != 1 {
+		t.Fatalf("expected 1 machine, got %d", len(machines))
+	}
+	mID := machines[0].ID
+	if machines[0].Icon != "laptop" {
+		t.Errorf("created icon %q, want laptop", machines[0].Icon)
+	}
+
+	icon := func() string {
+		t.Helper()
+		m, err := srv.store.GetMachine(mID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m.Icon
+	}
+
+	// Admin edit switches it, and the picker comes back preselected.
+	w = do(t, h, "POST", fmt.Sprintf("/admin/machines/%d", mID), cookies, url.Values{
+		"csrf": {csrf}, "name": {"laptop"}, "icon": {"server"},
+		"public_key": {key(1)}, "address": {"10.0.0.5"}, "endpoint_ids": {epID},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("admin edit: got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+	if got := icon(); got != "server" {
+		t.Errorf("after admin edit: icon %q, want server", got)
+	}
+	page := do(t, h, "GET", "/admin/machines", cookies, nil)
+	if want := `value="server" class="sr-only" checked`; !strings.Contains(page.Body.String(), want) {
+		t.Errorf("the admin picker does not preselect the current icon (%s)", want)
+	}
+
+	// The owner can change it from their own dashboard, without re-approval:
+	// only a key change sends a machine back to pending.
+	w = do(t, h, "POST", fmt.Sprintf("/machines/%d", mID), cookies, url.Values{
+		"csrf": {csrf}, "name": {"laptop"}, "icon": {"phone"}, "public_key": {key(1)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("user edit: got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+	if got := icon(); got != "phone" {
+		t.Errorf("after user edit: icon %q, want phone", got)
+	}
+	if m, _ := srv.store.GetMachine(mID); m.Status != store.StatusActive {
+		t.Errorf("changing the icon must not send the machine back to %q", m.Status)
+	}
+
+	// A value outside the set is normalized, not rejected.
+	w = do(t, h, "POST", fmt.Sprintf("/machines/%d", mID), cookies, url.Values{
+		"csrf": {csrf}, "name": {"laptop"}, "icon": {"nas"}, "public_key": {key(1)},
+	})
+	if w.Code != http.StatusSeeOther || strings.Contains(w.Header().Get("Location"), "err=") {
+		t.Fatalf("unknown icon should be accepted: got %d %q", w.Code, w.Header().Get("Location"))
+	}
+	if got := icon(); got != store.DefaultMachineIcon {
+		t.Errorf("unknown icon stored as %q, want %q", got, store.DefaultMachineIcon)
+	}
+
+	// The dashboard fragment renders standalone and embeds the picker, so it
+	// must resolve there too (it is parsed without the surrounding page).
+	frag := do(t, h, "GET", "/machines/list", cookies, nil)
+	if frag.Code != http.StatusOK {
+		t.Fatalf("dashboard fragment: got %d", frag.Code)
+	}
+	if !strings.Contains(frag.Body.String(), `name="icon"`) {
+		t.Error("the dashboard fragment has no icon picker")
+	}
+}
+
+// TestStatusTableShowsMachineIcons: the fleet status table names machines, so it
+// carries their icon too — but a reported key no machine claims has none, and
+// must not fall back to a device that does not exist in the portal.
+func TestStatusTableShowsMachineIcons(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)},
+		"host_port": {"vpn-par:51820"}, "allowed_ips": {"192.168.1.0/24"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: got %d (%s)", w.Code, w.Body)
+	}
+	eps, _ := srv.store.ListEndpoints()
+	ep := eps[0]
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"bob"}, "name": {"laptop"}, "icon": {"laptop"},
+		"public_key": {key(1)}, "address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+
+	// The hub reports the known machine plus a key the portal never saw.
+	stranger := key(9)
+	dump := fmt.Sprintf("%s\t(none)\t51820\toff\n%s\t(none)\t198.51.100.4:51820\t10.0.0.5/32\t%d\t100\t200\toff\n"+
+		"%s\t(none)\t198.51.100.9:51820\t10.0.0.200/32\t%d\t10\t20\toff\n",
+		key(2), key(1), time.Now().Unix(), stranger, time.Now().Unix())
+	r := httptest.NewRequest("POST", fmt.Sprintf("/api/endpoints/%d/status", ep.ID), strings.NewReader(dump))
+	r.Header.Set("Authorization", "Bearer "+ep.UploadToken)
+	up := httptest.NewRecorder()
+	h.ServeHTTP(up, r)
+	if up.Code != http.StatusNoContent && up.Code != http.StatusOK {
+		t.Fatalf("status upload: got %d (%s)", up.Code, up.Body)
+	}
+
+	table := do(t, h, "GET", "/admin/status/table", cookies, nil)
+	if table.Code != http.StatusOK {
+		t.Fatalf("status table: got %d", table.Code)
+	}
+	body := table.Body.String()
+	if !strings.Contains(body, string(machineIcon("laptop", 14))) {
+		t.Error("the status table does not show the machine's icon")
+	}
+	// The unknown peer has no machine, so no icon: the only drawings on the page
+	// are the known machine's and the endpoint sparkline.
+	if n := strings.Count(body, `viewBox="0 0 24 24"`); n != 1 {
+		t.Errorf("expected exactly 1 device icon in the table, got %d", n)
+	}
+}

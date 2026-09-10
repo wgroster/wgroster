@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-const machineCols = `id, owner_uid, name, public_key, address, status, created_at, approved_at, approved_by, owner_name`
+const machineCols = `id, owner_uid, name, public_key, address, status, created_at, approved_at, approved_by, owner_name, icon`
 
 func scanMachine(sc interface{ Scan(...any) error }) (*Machine, error) {
 	var m Machine
 	var created int64
 	var approved sql.NullInt64
 	if err := sc.Scan(&m.ID, &m.OwnerUID, &m.Name, &m.PublicKey, &m.Address,
-		&m.Status, &created, &approved, &m.ApprovedBy, &m.OwnerName); err != nil {
+		&m.Status, &created, &approved, &m.ApprovedBy, &m.OwnerName, &m.Icon); err != nil {
 		return nil, err
 	}
 	m.CreatedAt = time.Unix(created, 0)
@@ -27,11 +27,12 @@ func scanMachine(sc interface{ Scan(...any) error }) (*Machine, error) {
 func (s *Store) CreateMachine(m *Machine) error {
 	m.CreatedAt = time.Now()
 	m.Status = StatusPending
+	m.Icon = NormalizeIcon(m.Icon)
 	res, err := s.db.Exec(`
-		INSERT INTO machine (owner_uid, owner_name, name, public_key, address, status, created_at, pending_since)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO machine (owner_uid, owner_name, name, public_key, address, status, created_at, pending_since, icon)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.OwnerUID, m.OwnerName, m.Name, m.PublicKey, "", StatusPending,
-		m.CreatedAt.Unix(), m.CreatedAt.Unix())
+		m.CreatedAt.Unix(), m.CreatedAt.Unix(), m.Icon)
 	if err != nil {
 		return err
 	}
@@ -48,9 +49,10 @@ func (s *Store) GetMachine(id int64) (*Machine, error) {
 	return m, err
 }
 
-// UpdateMachineIdentity updates a machine's name and public key.
-func (s *Store) UpdateMachineIdentity(id int64, name, publicKey string) error {
-	_, err := s.db.Exec(`UPDATE machine SET name=?, public_key=? WHERE id=?`, name, publicKey, id)
+// UpdateMachineIdentity updates a machine's name, public key and device icon.
+func (s *Store) UpdateMachineIdentity(id int64, name, publicKey, icon string) error {
+	_, err := s.db.Exec(`UPDATE machine SET name=?, public_key=?, icon=? WHERE id=?`,
+		name, publicKey, NormalizeIcon(icon), id)
 	return err
 }
 

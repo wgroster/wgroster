@@ -1,0 +1,16 @@
+{{/* Device icon radio group. The dot is the currently selected icon; the field
+     is always named "icon", and radios group per form owner so several pickers
+     on one page stay independent. */}}
+{{define "icon_picker"}}
+<div>
+  <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Icon</span>
+  <div class="flex flex-wrap gap-2">
+    {{range $name := iconNames}}
+    <label class="flex items-center gap-1.5 text-sm capitalize rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 cursor-pointer text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/40 has-[:checked]:text-emerald-800 dark:has-[:checked]:text-emerald-300">
+      <input type="radio" name="icon" value="{{$name}}" class="sr-only" {{if eq $name $}}checked{{end}}>
+      {{machineIcon $name 18}}{{$name}}
+    </label>
+    {{end}}
+  </div>
+</div>
+{{end}}

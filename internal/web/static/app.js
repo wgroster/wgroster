@@ -193,10 +193,14 @@
     if (!name) { enrollMsg("Enter a device name first."); return; }
     enrollMsg("");
 
+    // The icon picker sits outside a form (this block posts by fetch), so read
+    // the checked radio from its own container.
+    var iconEl = document.querySelector('#enroll-icons input[name="icon"]:checked');
     var kp = nacl.box.keyPair();
     var priv = base64(kp.secretKey);
     var body = "csrf=" + encodeURIComponent(btn.getAttribute("data-csrf")) +
       "&name=" + encodeURIComponent(name) +
+      "&icon=" + encodeURIComponent(iconEl ? iconEl.value : "phone") +
       "&public_key=" + encodeURIComponent(base64(kp.publicKey));
 
     fetch("/machines/enroll", {

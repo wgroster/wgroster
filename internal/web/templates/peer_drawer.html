@@ -2,6 +2,7 @@
 <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-start gap-3 sticky top-0 bg-white dark:bg-slate-900">
   <div class="min-w-0 flex-1">
     <div class="flex items-center gap-2">
+      {{if .MachineID}}<span class="text-slate-400 dark:text-slate-500 shrink-0">{{machineIcon .Icon 18}}</span>{{end}}
       <span class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{.Name}}</span>
       {{if eq .State "online"}}<span class="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">online</span>
       {{else if eq .State "offline"}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">offline</span>

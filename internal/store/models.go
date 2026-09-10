@@ -33,9 +33,31 @@ type Machine struct {
 	PublicKey  string
 	Address    string // single global tunnel IP, e.g. "10.0.0.5"
 	Status     string
+	Icon       string // device icon, one of MachineIcons
 	CreatedAt  time.Time
 	ApprovedAt *time.Time
 	ApprovedBy string
+}
+
+// MachineIcons is the fixed set of device icons a machine may carry, in the
+// order the pickers offer them. Keeping it small and closed means the value is
+// a safe lookup key everywhere it is rendered.
+var MachineIcons = []string{"laptop", "phone", "tablet", "server", "desktop"}
+
+// DefaultMachineIcon is what a machine gets when none was chosen, and what rows
+// predating the column hold.
+const DefaultMachineIcon = "desktop"
+
+// NormalizeIcon maps a submitted icon onto the known set. An unrecognised value
+// is a stale form or a hand-crafted POST, not something worth refusing a machine
+// over, so it falls back to the default instead of erroring.
+func NormalizeIcon(icon string) string {
+	for _, v := range MachineIcons {
+		if v == icon {
+			return v
+		}
+	}
+	return DefaultMachineIcon
 }
 
 // OwnerDisplay returns the owner's display name, falling back to the uid.

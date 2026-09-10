@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/wgroster/wgroster/internal/auth"
+	"github.com/wgroster/wgroster/internal/store"
 )
 
 //go:embed templates/*.html
@@ -21,7 +22,10 @@ var fullPages = []string{
 	"admin_machines", "admin_endpoints", "admin_status", "admin_audit",
 }
 
-var partials = []string{"status_table", "peer_drawer", "dashboard_list"}
+// partials are rendered standalone: the htmx fragment endpoints (status_table,
+// peer_drawer, dashboard_list) plus icon_picker, a snippet every page embeds
+// rather than a fragment of its own.
+var partials = []string{"status_table", "peer_drawer", "dashboard_list", "icon_picker"}
 
 var (
 	pageTmpls    = map[string]*template.Template{}
@@ -29,15 +33,43 @@ var (
 )
 
 var funcs = template.FuncMap{
-	"humanBytes": humanBytes,
-	"ago":        ago,
-	"since":      since,
-	"exact":      exact,
-	"upper":      strings.ToUpper,
-	"lower":      strings.ToLower,
-	"initial":    initial,
-	"sparkline":  sparkline,
-	"shortIPs":   shortIPs,
+	"machineIcon": machineIcon,
+	"iconNames":   func() []string { return store.MachineIcons },
+	"humanBytes":  humanBytes,
+	"ago":         ago,
+	"since":       since,
+	"exact":       exact,
+	"upper":       strings.ToUpper,
+	"lower":       strings.ToLower,
+	"initial":     initial,
+	"sparkline":   sparkline,
+	"shortIPs":    shortIPs,
+}
+
+// machineIconPaths holds the drawing for each device icon of
+// store.MachineIcons, as the inner markup of a 24x24 stroked SVG.
+var machineIconPaths = map[string]string{
+	"laptop":  `<rect x="3" y="5" width="18" height="11" rx="1.5"/><path d="M2 19.5h20"/>`,
+	"phone":   `<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18.5h2"/>`,
+	"tablet":  `<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M10.5 18.5h3"/>`,
+	"server":  `<rect x="3" y="3.5" width="18" height="7" rx="1.5"/><rect x="3" y="13.5" width="18" height="7" rx="1.5"/><path d="M6.5 7h.01M6.5 17h.01"/>`,
+	"desktop": `<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M12 16v4M9 20h6"/>`,
+}
+
+// machineIcon renders a machine's device icon as inline SVG at the given pixel
+// size. The drawing is looked up by name in a fixed table (an unknown or empty
+// name falls back to the default), so the output never carries user input and
+// needs no inline style or script under the CSP. Color is inherited through
+// currentColor, like sparkline above.
+func machineIcon(name string, size int) template.HTML {
+	d, ok := machineIconPaths[name]
+	if !ok {
+		d = machineIconPaths[store.DefaultMachineIcon]
+	}
+	return template.HTML(fmt.Sprintf(
+		`<svg width="%d" height="%d" viewBox="0 0 24 24" fill="none" stroke="currentColor" `+
+			`stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">%s</svg>`,
+		size, size, d))
 }
 
 // sparkline renders a tiny inline SVG line chart from numeric samples. The
@@ -151,10 +183,11 @@ func loadTemplates() error {
 	// Every page is parsed with the layout and all partials, so a page can embed
 	// the same partial an htmx fragment endpoint serves (e.g. the dashboard
 	// machine list) instead of keeping a second copy of the markup.
-	files := []string{"templates/layout.html"}
+	partialFiles := make([]string, 0, len(partials))
 	for _, p := range partials {
-		files = append(files, "templates/"+p+".html")
+		partialFiles = append(partialFiles, "templates/"+p+".html")
 	}
+	files := append([]string{"templates/layout.html"}, partialFiles...)
 	for _, p := range fullPages {
 		t, err := template.New(p).Funcs(funcs).ParseFS(templatesFS,
 			append(files, "templates/"+p+".html")...)
@@ -163,8 +196,11 @@ func loadTemplates() error {
 		}
 		pageTmpls[p] = t
 	}
+	// A partial is parsed with every other partial, not alone: a fragment served
+	// on its own (the dashboard list) embeds shared snippets (the icon picker)
+	// just like the page that also holds it.
 	for _, p := range partials {
-		t, err := template.New(p).Funcs(funcs).ParseFS(templatesFS, "templates/"+p+".html")
+		t, err := template.New(p).Funcs(funcs).ParseFS(templatesFS, partialFiles...)
 		if err != nil {
 			return fmt.Errorf("parse partial %s: %w", p, err)
 		}

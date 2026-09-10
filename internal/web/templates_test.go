@@ -2,6 +2,7 @@ package web
 
 import (
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func TestTemplatesExecute(t *testing.T) {
 	}
 
 	sess := &auth.Session{UID: "alice", Name: "Alice Example", Admin: true, Local: true, CSRF: "tok"}
-	m := &store.Machine{ID: 1, OwnerUID: "alice", Name: "laptop", PublicKey: "k", Address: "10.0.0.5", Status: store.StatusActive}
+	m := &store.Machine{ID: 1, OwnerUID: "alice", Name: "laptop", PublicKey: "k", Address: "10.0.0.5", Status: store.StatusActive, Icon: "laptop"}
 	ep := &store.Endpoint{ID: 1, Name: "paris", HostPort: "vpn:51820", PublicKey: "k", UploadToken: "t"}
 
 	data := map[string]any{
@@ -91,10 +92,10 @@ func TestTemplatesExecute(t *testing.T) {
 		Extra:       1,
 		Series:      []int64{10, 50, 30, 80, 20, 60},
 		Peers: []peerStatus{
-			{Name: "laptop", Owner: "Alice Adams", OwnerUID: "alice", HasPhoto: true, Address: "10.0.0.5", State: statePeerOnline, RemoteEndpoint: "203.0.113.5:1234", HubAllowedIPs: "10.0.0.5/32", LastHandshake: time.Now(), RX: 1024, TX: 2048, RxRate: 1500, TxRate: 800},
-			{Name: "desktop", Owner: "Alice Adams", OwnerUID: "alice", HasPhoto: true, SameOwnerAsPrev: true, Address: "10.0.0.6", State: statePeerOffline, HubAllowedIPs: "10.0.0.99/32", AddrMismatch: true},
-			{Name: "tablet", Owner: "bob", OwnerUID: "bob", Address: "10.0.0.7", State: statePeerUnlinked, HubAllowedIPs: "10.0.0.7/32"},
-			{Name: "phone", Owner: "bob", OwnerUID: "bob", SameOwnerAsPrev: true, State: statePeerUnlinked, Pending: true, HubAllowedIPs: "10.0.0.8/32"},
+			{Name: "laptop", Icon: "laptop", Owner: "Alice Adams", OwnerUID: "alice", HasPhoto: true, Address: "10.0.0.5", State: statePeerOnline, RemoteEndpoint: "203.0.113.5:1234", HubAllowedIPs: "10.0.0.5/32", LastHandshake: time.Now(), RX: 1024, TX: 2048, RxRate: 1500, TxRate: 800},
+			{Name: "desktop", Icon: "desktop", Owner: "Alice Adams", OwnerUID: "alice", HasPhoto: true, SameOwnerAsPrev: true, Address: "10.0.0.6", State: statePeerOffline, HubAllowedIPs: "10.0.0.99/32", AddrMismatch: true},
+			{Name: "tablet", Icon: "tablet", Owner: "bob", OwnerUID: "bob", Address: "10.0.0.7", State: statePeerUnlinked, HubAllowedIPs: "10.0.0.7/32"},
+			{Name: "phone", Icon: "phone", Owner: "bob", OwnerUID: "bob", SameOwnerAsPrev: true, State: statePeerUnlinked, Pending: true, HubAllowedIPs: "10.0.0.8/32"},
 			{Name: "(unknown)", PublicKey: "0BcD/eFgHiJkLmNoPqRsTuVwXyZ0123456789abcd=", State: statePeerExtra, RemoteEndpoint: "198.51.100.7:51820", HubAllowedIPs: "10.0.0.200/32"},
 		},
 	}}
@@ -112,8 +113,17 @@ func TestTemplatesExecute(t *testing.T) {
 		t.Errorf("execute status_table: %v", err)
 	}
 
+	// The icon picker is embedded by several forms; render it for every known
+	// icon and for a value that is not in the set (nothing preselected).
+	for _, sel := range append(append([]string{}, store.MachineIcons...), "nas") {
+		if err := partialTmpls["icon_picker"].ExecuteTemplate(io.Discard, "icon_picker", sel); err != nil {
+			t.Errorf("execute icon_picker (%s): %v", sel, err)
+		}
+	}
+
 	drawer := peerDetail{
 		EndpointName: "amsterdam", PublicKey: "k", Name: "laptop", Owner: "alice", Address: "10.0.0.5",
+		Icon: "laptop", MachineID: 1,
 		State: statePeerOnline, Endpoints: []string{"amsterdam"}, RemoteEndpoint: "203.0.113.4:51820",
 		PTR: "host.example.net", GeoEnabled: true,
 		Geo:           geoip.Result{Country: "FR", City: "Paris", ASN: "AS3215", Org: "Orange"},
@@ -150,6 +160,42 @@ func TestTemplatesExecute(t *testing.T) {
 	for name, d := range drifts {
 		if err := partialTmpls["peer_drawer"].ExecuteTemplate(io.Discard, "peer_drawer", d); err != nil {
 			t.Errorf("execute peer_drawer (%s): %v", name, err)
+		}
+	}
+}
+
+// TestMachineIconMarkup pins what the icon helper emits: a drawing from the
+// fixed table, an unknown or empty name falling back to the default, and no
+// inline style or script (the CSP forbids both).
+func TestMachineIconMarkup(t *testing.T) {
+	for _, name := range store.MachineIcons {
+		got := string(machineIcon(name, 18))
+		if !strings.HasPrefix(got, `<svg width="18" height="18"`) {
+			t.Errorf("%s: unexpected markup %q", name, got)
+		}
+		if !strings.Contains(got, `stroke="currentColor"`) {
+			t.Errorf("%s: icon must inherit its color", name)
+		}
+		if strings.Contains(got, "style=") || strings.Contains(got, "<script") {
+			t.Errorf("%s: markup breaks the CSP: %q", name, got)
+		}
+	}
+
+	want := string(machineIcon(store.DefaultMachineIcon, 18))
+	for _, name := range []string{"", "nas", "desktop "} {
+		if got := string(machineIcon(name, 18)); got != want {
+			t.Errorf("machineIcon(%q) should fall back to the default drawing", name)
+		}
+	}
+
+	// Every icon in the set must actually have a drawing, or the picker would
+	// offer a choice that renders as the default.
+	if len(machineIconPaths) != len(store.MachineIcons) {
+		t.Errorf("%d drawings for %d icons", len(machineIconPaths), len(store.MachineIcons))
+	}
+	for _, name := range store.MachineIcons {
+		if _, ok := machineIconPaths[name]; !ok {
+			t.Errorf("no drawing for icon %q", name)
 		}
 	}
 }

@@ -26,6 +26,7 @@ type peerDetail struct {
 	CSRF           string // the drawer is a partial: it carries its own token
 	PublicKey      string
 	Name           string
+	Icon           string
 	Owner          string
 	Address        string
 	State          string
@@ -94,6 +95,7 @@ func (s *Server) handlePeerDetail(w http.ResponseWriter, r *http.Request) {
 		d.MachineID = m.ID
 		d.Pending = m.Status == store.StatusPending
 		d.Name = m.Name
+		d.Icon = m.Icon
 		d.Owner = m.OwnerDisplay()
 		d.Address = m.Address
 		if eps, err := s.store.EndpointsForMachine(m.ID); err == nil {

@@ -71,7 +71,8 @@ func (s *Server) handleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := &store.Machine{OwnerUID: sess.UID, OwnerName: sess.Name, Name: name, PublicKey: pubKey}
+	m := &store.Machine{OwnerUID: sess.UID, OwnerName: sess.Name, Name: name, PublicKey: pubKey,
+		Icon: store.NormalizeIcon(r.FormValue("icon"))}
 	if err := s.store.CreateMachine(m); err != nil {
 		http.Error(w, "could not register (public key already used?)", http.StatusConflict)
 		return
