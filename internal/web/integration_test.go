@@ -1603,6 +1603,15 @@ func TestAdminMachinesListFragment(t *testing.T) {
 	if !strings.Contains(body, csrf) {
 		t.Error("fragment carries no CSRF token")
 	}
+
+	// The public key is abbreviated on the row and copied in full from it.
+	k := key(1)
+	if !strings.Contains(body, ">"+k[:12]+"…</button>") {
+		t.Error("the public key is not abbreviated on the row")
+	}
+	if !strings.Contains(body, `data-copy-text="`+k+`"`) {
+		t.Error("the row does not offer the full key to copy")
+	}
 }
 
 // Owners waiting on an administrator come first, and a row can be found by

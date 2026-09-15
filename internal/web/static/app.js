@@ -89,7 +89,7 @@
     // Clicking the backdrop of a <dialog> closes it (target is the dialog itself).
     if (e.target.tagName === "DIALOG") { e.target.close(); return; }
 
-    var t = e.target.closest ? e.target.closest("[data-copy],[data-action],[data-dialog],[data-close],[data-flash-close],[data-theme],[data-confirm-ok]") : null;
+    var t = e.target.closest ? e.target.closest("[data-copy],[data-copy-text],[data-action],[data-dialog],[data-close],[data-flash-close],[data-theme],[data-confirm-ok]") : null;
     if (!t) return;
 
     if (t.hasAttribute("data-confirm-ok")) {
@@ -125,6 +125,13 @@
     if (t.hasAttribute("data-copy")) {
       var el = document.querySelector(t.getAttribute("data-copy"));
       if (el) copyText(el.textContent, t);
+      return;
+    }
+
+    // data-copy-text carries the value itself, for a control that shows an
+    // abbreviation of what it copies (a public key on a listing row).
+    if (t.hasAttribute("data-copy-text")) {
+      copyText(t.getAttribute("data-copy-text"), t);
       return;
     }
 

@@ -44,6 +44,7 @@ var funcs = template.FuncMap{
 	"initial":     initial,
 	"sparkline":   sparkline,
 	"shortIPs":    shortIPs,
+	"shortKey":    shortKey,
 }
 
 // machineIconPaths holds the drawing for each device icon of
@@ -152,6 +153,17 @@ func plural(n int64) string {
 		return ""
 	}
 	return "s"
+}
+
+// shortKey abbreviates a WireGuard public key for a listing row. Twelve base64
+// characters are 72 bits: far more than enough to recognise a key among a
+// fleet's worth, where the full 44 take a line of their own and are read by
+// nobody. The whole key stays one click (copy) or one hover (title) away.
+func shortKey(k string) string {
+	if len(k) <= 12 {
+		return k
+	}
+	return k[:12] + "…"
 }
 
 // shortIPs drops the prefix length from single-host entries of a comma-separated

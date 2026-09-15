@@ -74,11 +74,12 @@
                timestamp stays one hover away. */}}
           {{if not $pending}} · <span class="cursor-help" title="{{exact $m.LastHandshake}}">last handshake {{ago $m.LastHandshake}}</span>{{end}}
           {{if $m.RemoteIP}} · from <span class="font-mono text-slate-600 dark:text-slate-400 cursor-help" title="{{$m.RemoteHint}}">{{$m.RemoteIP}}</span>{{end}}
+          · <button type="button" data-copy-text="{{$m.M.PublicKey}}" title="{{$m.M.PublicKey}} — click to copy"
+                    class="font-mono text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">{{shortKey $m.M.PublicKey}}</button>
         </div>
         {{if and (not $pending) $m.M.ApprovedBy}}
           <div class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">approved by {{$m.M.ApprovedBy}}{{if not $m.ApprovedAt.IsZero}} · {{ago $m.ApprovedAt}}{{end}}</div>
         {{end}}
-        <div class="text-xs text-slate-400 dark:text-slate-500 font-mono mt-1 truncate">{{$m.M.PublicKey}}</div>
       </div>
       <div class="flex items-center gap-2">
         {{if and (not $pending) (not $disabled) $m.PrimaryEndpointID}}
