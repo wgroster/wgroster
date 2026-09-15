@@ -33,13 +33,16 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	gauge := func(name, help string) { fmt.Fprintf(&b, "# HELP %s %s\n# TYPE %s gauge\n", name, help, name) }
 
 	reporting := 0
-	var pending, disabled int
+	var pending, disabled, dormant int
 	for _, m := range machines {
 		switch m.Status {
 		case store.StatusPending:
 			pending++
 		case store.StatusDisabled:
 			disabled++
+		}
+		if m.Dormant() {
+			dormant++
 		}
 	}
 	for _, es := range statuses {
@@ -60,6 +63,8 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "wg_machines_pending %d\n", pending)
 	gauge("wg_machines_disabled", "Machines taken out of service (excluded from every expected peer list).")
 	fmt.Fprintf(&b, "wg_machines_disabled %d\n", disabled)
+	gauge("wg_machines_dormant", "Machines flagged by the dormancy check as not seen for dormant_days.")
+	fmt.Fprintf(&b, "wg_machines_dormant %d\n", dormant)
 
 	gauge("wg_peers_online", "Expected peers seen online, per endpoint.")
 	for _, es := range statuses {

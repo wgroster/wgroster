@@ -64,6 +64,16 @@ func (s *Store) ReplaceStatus(endpointID int64, peers []StatusPeer, receivedAt t
 			endpointID, p.PublicKey, handshake, p.RX, p.TX, remote, p.AllowedIPs); err != nil {
 			return err
 		}
+		// Carry the handshake over to the machine itself. status_peer only holds
+		// what the hubs currently report, so it forgets a peer as soon as one
+		// drops it; machine.last_seen is what the dormancy check reads, and it
+		// only ever moves forward.
+		if handshake > 0 {
+			if _, err := tx.Exec(`UPDATE machine SET last_seen=? WHERE public_key=? AND last_seen<?`,
+				handshake, p.PublicKey, handshake); err != nil {
+				return err
+			}
+		}
 	}
 	if _, err := tx.Exec(`
 		INSERT INTO status_report (endpoint_id, received_at) VALUES (?, ?)

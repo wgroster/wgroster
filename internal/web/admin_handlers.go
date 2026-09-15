@@ -80,6 +80,7 @@ type userGroup struct {
 	OnlineN   int
 	PendingN  int
 	DisabledN int
+	DormantN  int
 	// Orphaned reports that the directory no longer knows this owner and the
 	// grace period has expired; AbsentSince is when the first absence was seen.
 	Orphaned    bool
@@ -144,6 +145,12 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 			mv.ApprovedAt = *m.ApprovedAt
 		}
 		mv.LastHandshake = handshakes[m.PublicKey]
+		if mv.LastHandshake.IsZero() {
+			// No hub currently carries this peer (removed, endpoint deleted): fall
+			// back to the last handshake the portal ever recorded for it, so the
+			// row says "last seen 3 months ago" instead of "never".
+			mv.LastHandshake = m.LastSeen
+		}
 		mv.Online = online(mv.LastHandshake)
 		views = append(views, mv)
 	}
@@ -175,6 +182,9 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 			g.PendingN++
 		case store.StatusDisabled:
 			g.DisabledN++
+		}
+		if mv.M.Dormant() {
+			g.DormantN++
 		}
 	}
 	sort.Strings(order)

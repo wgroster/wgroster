@@ -71,6 +71,9 @@ func (s *Server) buildDashboard(r *http.Request) (dashboardView, error) {
 	view.Machines = make([]machineView, 0, len(machines))
 	for _, m := range machines {
 		mv := machineView{M: m, LastHandshake: handshakes[m.PublicKey]}
+		if mv.LastHandshake.IsZero() {
+			mv.LastHandshake = m.LastSeen // no hub carries this peer any more
+		}
 		mv.Online = online(mv.LastHandshake)
 		linked := make(map[int64]bool, len(links[m.ID]))
 		for _, id := range links[m.ID] {

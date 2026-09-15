@@ -144,3 +144,50 @@ func TestMachineIconMigratesExistingDatabase(t *testing.T) {
 		t.Errorf("migrated machine icon %q, want %q", got.Icon, DefaultMachineIcon)
 	}
 }
+
+// machine.last_seen is what the dormancy check reads, so it must record every
+// handshake a hub reports, only ever move forward, and survive the peer leaving
+// the hub's report.
+func TestLastSeenFollowsReports(t *testing.T) {
+	st := newTestStore(t)
+	ep := &Endpoint{Name: "par", PublicKey: "k", HostPort: "h:51820", UploadToken: "t"}
+	if err := st.CreateEndpoint(ep); err != nil {
+		t.Fatal(err)
+	}
+	m := &Machine{OwnerUID: "alice", Name: "laptop", PublicKey: "peer-key"}
+	if err := st.CreateMachine(m); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetMachine(m.ID); !got.LastSeen.IsZero() {
+		t.Fatalf("last seen = %v on a machine that never connected, want zero", got.LastSeen)
+	}
+
+	handshake := time.Now().Add(-time.Minute).Truncate(time.Second)
+	report := func(peers []StatusPeer) {
+		t.Helper()
+		if err := st.ReplaceStatus(ep.ID, peers, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report([]StatusPeer{{PublicKey: "peer-key", LastHandshake: handshake}})
+	got, err := st.GetMachine(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.LastSeen.Equal(handshake) {
+		t.Errorf("last seen = %v, want %v", got.LastSeen, handshake)
+	}
+
+	// An older handshake (a hub that restarted, another endpoint lagging behind)
+	// must not move it back.
+	report([]StatusPeer{{PublicKey: "peer-key", LastHandshake: handshake.Add(-time.Hour)}})
+	if got, _ = st.GetMachine(m.ID); !got.LastSeen.Equal(handshake) {
+		t.Errorf("last seen = %v after an older report, want it kept at %v", got.LastSeen, handshake)
+	}
+
+	// The peer disappears from the hub entirely: the record stays.
+	report(nil)
+	if got, _ = st.GetMachine(m.ID); !got.LastSeen.Equal(handshake) {
+		t.Errorf("last seen = %v once the hub dropped the peer, want it kept at %v", got.LastSeen, handshake)
+	}
+}

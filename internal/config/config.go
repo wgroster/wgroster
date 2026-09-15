@@ -89,6 +89,16 @@ type Config struct {
 	// concentrator. Their address and endpoint links are kept, so enabling them
 	// again is one click either way.
 	OrphanAction string `yaml:"orphan_action"`
+
+	// DormantDays enables the dormancy check: a machine whose last handshake is
+	// older than N days (or that never connected at all, counted from its
+	// approval) is reported (0 = check disabled). Unlike the offboarding check
+	// it needs no directory — the evidence is the concentrators' own reports.
+	DormantDays int `yaml:"dormant_days"`
+	// DormantAction is what happens to a dormant machine: "flag" (the default)
+	// only records and reports it, "disable" also takes it out of service, which
+	// drops it from the expected peer list on every concentrator.
+	DormantAction string `yaml:"dormant_action"`
 }
 
 // Orphan action values for OrphanAction.
@@ -99,10 +109,23 @@ const (
 	OrphanDisable = "disable"
 )
 
+// Dormancy action values for DormantAction. They mirror the orphan ones: the
+// two checks answer different questions ("is the owner gone?" versus "is the
+// device gone?") but offer the same choice of what to do about it.
+const (
+	// DormantFlag reports a dormant machine without taking it out of service.
+	DormantFlag = OrphanFlag
+	// DormantDisable additionally disables it.
+	DormantDisable = OrphanDisable
+)
+
 // OrphanCheckEnabled reports whether the directory offboarding check should run.
 func (c *Config) OrphanCheckEnabled() bool {
 	return c.OrphanGraceDays > 0 && c.LDAP.Configured()
 }
+
+// DormantCheckEnabled reports whether the dormancy check should run.
+func (c *Config) DormantCheckEnabled() bool { return c.DormantDays > 0 }
 
 // LocalAdmin is a built-in administrator account checked before LDAP.
 type LocalAdmin struct {
@@ -258,6 +281,15 @@ func Load(path string) (*Config, error) {
 	}
 	if c.OrphanAction != OrphanFlag && c.OrphanAction != OrphanDisable {
 		return nil, fmt.Errorf("invalid orphan_action %q: use %q or %q", c.OrphanAction, OrphanFlag, OrphanDisable)
+	}
+	if c.DormantDays < 0 {
+		return nil, fmt.Errorf("dormant_days must not be negative")
+	}
+	if c.DormantAction == "" {
+		c.DormantAction = DormantFlag
+	}
+	if c.DormantAction != DormantFlag && c.DormantAction != DormantDisable {
+		return nil, fmt.Errorf("invalid dormant_action %q: use %q or %q", c.DormantAction, DormantFlag, DormantDisable)
 	}
 	// The check asks the directory whether a uid still exists, so it cannot run
 	// without one. Fail loudly rather than silently never running.

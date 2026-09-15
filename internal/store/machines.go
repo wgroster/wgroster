@@ -6,17 +6,24 @@ import (
 	"time"
 )
 
-const machineCols = `id, owner_uid, name, public_key, address, status, created_at, approved_at, approved_by, owner_name, icon`
+const machineCols = `id, owner_uid, name, public_key, address, status, created_at, approved_at, approved_by, owner_name, icon, last_seen, dormant_since`
 
 func scanMachine(sc interface{ Scan(...any) error }) (*Machine, error) {
 	var m Machine
-	var created int64
+	var created, lastSeen, dormant int64
 	var approved sql.NullInt64
 	if err := sc.Scan(&m.ID, &m.OwnerUID, &m.Name, &m.PublicKey, &m.Address,
-		&m.Status, &created, &approved, &m.ApprovedBy, &m.OwnerName, &m.Icon); err != nil {
+		&m.Status, &created, &approved, &m.ApprovedBy, &m.OwnerName, &m.Icon,
+		&lastSeen, &dormant); err != nil {
 		return nil, err
 	}
 	m.CreatedAt = time.Unix(created, 0)
+	if lastSeen > 0 {
+		m.LastSeen = time.Unix(lastSeen, 0)
+	}
+	if dormant > 0 {
+		m.DormantSince = time.Unix(dormant, 0)
+	}
 	if approved.Valid {
 		t := time.Unix(approved.Int64, 0)
 		m.ApprovedAt = &t
@@ -116,6 +123,20 @@ func (s *Store) SetMachineDisabled(id int64) error {
 func (s *Store) SetMachineActive(id int64, approvedBy string) error {
 	_, err := s.db.Exec(`UPDATE machine SET status=?, approved_at=?, approved_by=? WHERE id=?`,
 		StatusActive, time.Now().Unix(), approvedBy, id)
+	return err
+}
+
+// FlagMachineDormant records that the dormancy sweep has acted on a machine, so
+// it is reported once rather than on every pass.
+func (s *Store) FlagMachineDormant(id int64, at time.Time) error {
+	_, err := s.db.Exec(`UPDATE machine SET dormant_since=? WHERE id=?`, at.Unix(), id)
+	return err
+}
+
+// ClearMachineDormant drops the dormancy flag of a machine that has been seen
+// again.
+func (s *Store) ClearMachineDormant(id int64) error {
+	_, err := s.db.Exec(`UPDATE machine SET dormant_since=0 WHERE id=?`, id)
 	return err
 }
 

@@ -91,6 +91,20 @@ orphan_grace_days: 0
 # makes everyone look gone, and that must not disconnect the fleet.
 orphan_action: "flag"
 
+# Dormancy check (no LDAP needed). The hourly maintenance sweep reports machines
+# whose last handshake is older than this many days — and machines that were
+# approved more than that long ago and never connected at all. 0 disables it.
+# A device nobody uses any more otherwise keeps a working peer forever.
+dormant_days: 0
+# What happens to a dormant machine:
+#   flag    — report only, it keeps working (default)
+#   disable — also take it out of service, dropping it from every concentrator's
+#             expected peer list. Its address and endpoints are kept.
+# The check refuses to act when no endpoint has reported in the last hour, or
+# when a majority of active machines look dormant: agents that all stopped (or a
+# portal that was down for a week) must not be read as an idle fleet.
+dormant_action: "flag"
+
 # LDAP is optional when local_admin is configured.
 ldap:
   # OpenLDAP server URL.

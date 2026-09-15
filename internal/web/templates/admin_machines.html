@@ -86,6 +86,7 @@
         · <span class="text-emerald-600">{{$g.OnlineN}} online</span>
         {{if $g.PendingN}} · <span class="text-amber-600">{{$g.PendingN}} pending</span>{{end}}
         {{if $g.DisabledN}} · <span class="text-slate-500 dark:text-slate-400">{{$g.DisabledN}} disabled</span>{{end}}
+        {{if $g.DormantN}} · <span class="text-orange-600">{{$g.DormantN}} dormant</span>{{end}}
         {{if $g.Orphaned}} · <span class="text-red-600">owner offboarded</span>{{end}}
       </div>
     </div>
@@ -113,6 +114,10 @@
             <span class="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">● Online</span>
           {{else}}
             <span class="text-xs rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5">○ Offline</span>
+          {{end}}
+          {{if $m.M.Dormant}}
+            <span class="text-xs rounded-full bg-orange-100 text-orange-700 px-2 py-0.5 cursor-help"
+                  title="Not seen for longer than dormant_days — flagged {{ago $m.M.DormantSince}}">Dormant</span>
           {{end}}
         </div>
         <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">

@@ -18,10 +18,12 @@ import (
 const orphanCheckInterval = 24 * time.Hour
 
 // RunMaintenance periodically expires stale pending machines (freeing their
-// reserved IP), prunes the audit log and runs the directory offboarding check.
+// reserved IP), prunes the audit log and runs the directory offboarding and
+// dormancy checks.
 // No-op unless at least one of them is configured. Cancel ctx to stop.
 func (s *Server) RunMaintenance(ctx context.Context) {
-	if s.cfg.PendingExpiryDays <= 0 && s.cfg.AuditRetentionDays <= 0 && !s.cfg.OrphanCheckEnabled() {
+	if s.cfg.PendingExpiryDays <= 0 && s.cfg.AuditRetentionDays <= 0 &&
+		!s.cfg.OrphanCheckEnabled() && !s.cfg.DormantCheckEnabled() {
 		return
 	}
 	t := time.NewTicker(time.Hour)
@@ -37,8 +39,8 @@ func (s *Server) RunMaintenance(ctx context.Context) {
 }
 
 // sweep runs one round of retention: expired pending machines, old audit
-// entries, then the offboarding check. Each step is independent and skipped
-// when not configured.
+// entries, then the offboarding and dormancy checks. Each step is independent
+// and skipped when not configured.
 func (s *Server) sweep(ctx context.Context) {
 	if days := s.cfg.PendingExpiryDays; days > 0 {
 		cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
@@ -57,6 +59,7 @@ func (s *Server) sweep(ctx context.Context) {
 		}
 	}
 	s.sweepOrphans(ctx)
+	s.sweepDormant(ctx)
 }
 
 // sweepOrphans asks the directory whether every machine owner still exists, and
@@ -232,6 +235,158 @@ func (s *Server) orphanOwner(ctx context.Context, uid string, now time.Time) {
 	s.systemAudit("owner.orphaned", uid)
 	s.postAlert(ctx, alertKey{typ: "orphan", user: uid}, "firing", detail)
 }
+
+// dormantEvidenceWindow is how recent a status report must be for the dormancy
+// check to trust what it knows. The bundled agent pushes every 30s, so an hour
+// is a wide margin: it only rules out judging a fleet nobody is reporting on.
+const dormantEvidenceWindow = time.Hour
+
+// sweepDormant reports — and, with dormant_action: disable, takes out of service
+// — the machines that have not handshaked for dormant_days.
+//
+// A device that stopped being used keeps a working peer forever otherwise, which
+// is the longest-lived hole a VPN roster can carry. The evidence comes from the
+// concentrators' own reports, so unlike the offboarding check it needs no
+// directory; but for the same reason it must refuse to act when the reports
+// cannot be trusted (see dormantDecision).
+func (s *Server) sweepDormant(ctx context.Context) {
+	if !s.cfg.DormantCheckEnabled() {
+		return
+	}
+	machines, err := s.store.ListMachines()
+	if err != nil {
+		log.Printf("dormancy check: %v", err)
+		return
+	}
+	now := time.Now()
+
+	// A device seen again is no longer dormant, whatever the sweep decides
+	// below: clearing the flag is always safe, so it happens first and
+	// unconditionally.
+	cutoff := now.Add(-time.Duration(s.cfg.DormantDays) * 24 * time.Hour)
+	for _, m := range machines {
+		if m.Dormant() && m.LastSeen.After(cutoff) {
+			if err := s.store.ClearMachineDormant(m.ID); err != nil {
+				log.Printf("dormancy check: clear %d: %v", m.ID, err)
+				continue
+			}
+			log.Printf("dormancy check: %s (%s) was seen again", m.Name, m.OwnerUID)
+			s.systemAudit("machine.dormant_cleared", m.OwnerUID+"/"+m.Name)
+			s.postAlert(ctx, alertKey{typ: "dormant", machine: machineRef(m)}, "resolved", "")
+		}
+	}
+
+	fresh, err := s.hasFreshReport()
+	if err != nil {
+		log.Printf("dormancy check: %v", err)
+		return
+	}
+	dormant, refusal := dormantDecision(machines, cutoff, fresh)
+	if refusal != "" {
+		log.Printf("dormancy check: %s", refusal)
+		return
+	}
+	for _, m := range dormant {
+		s.dormantMachine(ctx, m, now)
+	}
+}
+
+// hasFreshReport reports whether any endpoint has sent a status report recently
+// enough for the fleet's handshake data to mean anything.
+func (s *Server) hasFreshReport() (bool, error) {
+	endpoints, err := s.store.ListEndpoints()
+	if err != nil {
+		return false, err
+	}
+	for _, e := range endpoints {
+		last, ok, err := s.store.LastReport(e.ID)
+		if err != nil {
+			return false, err
+		}
+		if ok && time.Since(last) < dormantEvidenceWindow {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// dormantDecision picks the active machines that have not been seen since
+// cutoff, and refuses the whole round when the silence says more about the
+// portal than about the devices. It returns either the machines to act on, or a
+// non-empty reason to do nothing.
+//
+// Both refusals guard the same failure: handshakes stop arriving for a reason
+// that has nothing to do with the devices (every agent stopped, the upload token
+// was rotated, the portal itself was down for a week). Acting on that would
+// disconnect a working fleet.
+//
+//   - no fresh report at all: nobody is telling the portal what is happening, so
+//     "not seen" is not evidence of anything;
+//   - a majority dormant: reports are arriving but nearly everything looks idle,
+//     which is the shape of an outage that has just ended, not of a fleet.
+//
+// A portal with a single active machine therefore never reaps it — there is no
+// second machine to corroborate that the silence is real.
+func dormantDecision(machines []*store.Machine, cutoff time.Time, freshReport bool) (dormant []*store.Machine, refusal string) {
+	active := 0
+	for _, m := range machines {
+		if m.Status != store.StatusActive {
+			continue
+		}
+		active++
+		if m.Dormant() {
+			continue // already acted upon
+		}
+		if m.SeenOrSince().Before(cutoff) {
+			dormant = append(dormant, m)
+		}
+	}
+	if len(dormant) == 0 {
+		return nil, ""
+	}
+	if !freshReport {
+		return nil, fmt.Sprintf("%d machine(s) look dormant but no endpoint has reported recently — "+
+			"refusing to act; check the agents and their upload tokens", len(dormant))
+	}
+	if len(dormant)*2 > active {
+		return nil, fmt.Sprintf("%d of %d active machine(s) look dormant — refusing to act on a majority; "+
+			"check that every concentrator is reporting", len(dormant), active)
+	}
+	return dormant, ""
+}
+
+// dormantMachine applies the configured action to one dormant machine and
+// records it. The flag is only set once the intended change succeeded, so a
+// failed write is retried on the next sweep instead of being lost.
+func (s *Server) dormantMachine(ctx context.Context, m *store.Machine, now time.Time) {
+	action := "machine.dormant"
+	if s.cfg.DormantAction == config.DormantDisable {
+		if err := s.store.SetMachineDisabled(m.ID); err != nil {
+			log.Printf("dormancy check: disable machine %d: %v", m.ID, err)
+			return
+		}
+		action = "machine.dormant_disabled"
+	}
+	if err := s.store.FlagMachineDormant(m.ID, now); err != nil {
+		log.Printf("dormancy check: flag machine %d: %v", m.ID, err)
+		return
+	}
+
+	seen := "never connected"
+	if !m.LastSeen.IsZero() {
+		seen = "last handshake " + ago(m.LastSeen)
+	}
+	detail := fmt.Sprintf("machine %q of %q is dormant (%s)", m.Name, m.OwnerUID, seen)
+	if s.cfg.DormantAction == config.DormantDisable {
+		detail += " and has been disabled"
+	}
+	log.Printf("dormancy check: %s", detail)
+	s.systemAudit(action, machineRef(m))
+	s.postAlert(ctx, alertKey{typ: "dormant", machine: machineRef(m)}, "firing", detail)
+}
+
+// machineRef is how a machine is named in the audit log and on the webhook.
+func machineRef(m *store.Machine) string { return m.OwnerUID + "/" + m.Name }
 
 // systemAudit records an action taken by the portal itself rather than by an
 // administrator, so the audit log tells the two apart.

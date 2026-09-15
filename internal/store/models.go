@@ -59,6 +59,29 @@ type Machine struct {
 	CreatedAt  time.Time
 	ApprovedAt *time.Time
 	ApprovedBy string
+	// LastSeen is the latest handshake ever reported for this key, on any
+	// endpoint. Zero means the device has never connected. It is recorded as
+	// reports come in, so it outlives the peer's presence on a hub.
+	LastSeen time.Time
+	// DormantSince is when the dormancy sweep acted on this machine; zero when
+	// it is not flagged.
+	DormantSince time.Time
+}
+
+// Dormant reports whether the dormancy sweep has flagged this machine.
+func (m *Machine) Dormant() bool { return !m.DormantSince.IsZero() }
+
+// SeenOrSince returns the machine's last handshake, or, for a device that has
+// never connected, the moment from which it could have: its approval, else its
+// creation. It is what "nothing has happened since" is measured from.
+func (m *Machine) SeenOrSince() time.Time {
+	if !m.LastSeen.IsZero() {
+		return m.LastSeen
+	}
+	if m.ApprovedAt != nil {
+		return *m.ApprovedAt
+	}
+	return m.CreatedAt
 }
 
 // MachineIcons is the fixed set of device icons a machine may carry, in the

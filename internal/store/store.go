@@ -46,7 +46,15 @@ CREATE TABLE IF NOT EXISTS machine (
   -- here rather than from created_at, so a machine sent back to pending long
   -- after it was created gets a full review window instead of being swept on
   -- the next pass.
-  pending_since INTEGER NOT NULL DEFAULT 0
+  pending_since INTEGER NOT NULL DEFAULT 0,
+  -- Latest handshake ever reported for this public key, on any endpoint. Unlike
+  -- status_peer it survives the peer disappearing from the hub (removed,
+  -- endpoint deleted, agent stopped), which is exactly the case the dormancy
+  -- check must judge: "not seen since" has to outlive the evidence.
+  last_seen INTEGER NOT NULL DEFAULT 0,
+  -- When the dormancy sweep acted on this machine, so it reports it once rather
+  -- than on every pass. Cleared as soon as the device is seen again.
+  dormant_since INTEGER NOT NULL DEFAULT 0
 );
 
 -- An endpoint public key must be unique across the fleet.
@@ -183,6 +191,8 @@ func Open(path string) (*Store, error) {
 		`ALTER TABLE machine ADD COLUMN owner_name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE machine ADD COLUMN pending_since INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE machine ADD COLUMN icon TEXT NOT NULL DEFAULT 'desktop'`,
+		`ALTER TABLE machine ADD COLUMN last_seen INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE machine ADD COLUMN dormant_since INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 			db.Close()

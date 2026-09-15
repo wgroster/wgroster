@@ -60,6 +60,10 @@ concentrator).
   `orphan_action: disable`, its machines are **disabled** and drop out of every
   concentrator's expected peer list.
 
+- The dormancy check reports machines that have not handshaked for
+  `dormant_days` (and those approved long ago that never connected), optionally
+  disabling them — a device nobody uses any more keeps a working peer otherwise.
+
 **Observability**
 - Live **status dashboard** (auto-refresh) with per-peer **throughput**.
 - Click a peer for a **detail drawer**: rx/tx **traffic curves** (14-day
@@ -313,6 +317,38 @@ pending (a user changing their public key) are subject to `pending_expiry_days`
 like any other, counted from the moment they entered the queue rather than from
 their creation, so you get the full review window before the address is freed.
 
+## Dormant devices
+
+An offboarded *owner* is only half the problem: a device that simply stopped
+being used keeps a working peer forever. With `dormant_days` set, the same
+hourly sweep looks at what the concentrators report:
+
+```yaml
+dormant_days: 90          # days without a handshake before acting
+dormant_action: "flag"    # flag (report only) | disable (take out of service)
+```
+
+The portal records the latest handshake it ever saw for each public key, so the
+answer survives the peer disappearing from a hub — a machine no concentrator
+carries any more is *more* dormant, not less. A machine that was approved more
+than `dormant_days` ago and never connected at all counts too.
+
+A dormant machine gets an orange badge on the machines page, a
+`machine.dormant` (or `machine.dormant_disabled`) entry in the audit log and an
+alert webhook, once — not on every sweep. If the device shows up again the flag
+clears on its own; a machine that was *disabled* stays disabled until an
+administrator enables it.
+
+The same fail-safe reasoning as offboarding applies, because the same kind of
+mistake is possible — silence that says nothing about the devices:
+
+- no endpoint has reported in the last hour → nobody is telling the portal what
+  is happening, so nothing is dormant;
+- more than half the active machines look dormant → the shape of an outage that
+  has just ended (every agent stopped, a rotated upload token, the portal itself
+  down for a week), not of a fleet. A portal with a single active machine
+  therefore never reaps it.
+
 ## Monitoring & alerting
 
 The **Status** page shows per-peer throughput and drift. Click a peer for the
@@ -325,7 +361,7 @@ or an admin session):
 
 - `wg_build_info{version="…"}` — always 1, labelled with the running version.
 - `wg_endpoints_total`, `wg_endpoints_reporting`, `wg_machines_total`,
-  `wg_machines_pending`, `wg_machines_disabled`
+  `wg_machines_pending`, `wg_machines_disabled`, `wg_machines_dormant`
 - `wg_peers_online|offline|missing|unlinked|unexpected{endpoint="…"}` —
   `unlinked` counts reported peers the portal knows but has not activated on that
   endpoint, `unexpected` those with a public key it has never seen.
@@ -347,11 +383,13 @@ An optional **alert webhook** (`alert_webhook_url`) is POSTed on transitions:
 {"endpoint":"paris","type":"missing","status":"firing","detail":"2 peer(s) missing on hub","time":"2026-06-04T08:00:00Z"}
 ```
 
-`type`: `stale | missing | unlinked | unexpected | mismatch | orphan`; `status`:
-`firing | resolved`. An `orphan` alert carries `user` instead of `endpoint`:
+`type`: `stale | missing | unlinked | unexpected | mismatch | orphan | dormant`;
+`status`: `firing | resolved`. An `orphan` alert carries `user` instead of
+`endpoint`, and a `dormant` alert carries `machine`:
 
 ```json
 {"user":"jdoe","type":"orphan","status":"firing","detail":"owner \"jdoe\" is no longer in the directory (2 machine(s) disabled)","time":"2026-08-28T08:00:00Z"}
+{"machine":"jdoe/laptop","type":"dormant","status":"firing","detail":"machine \"laptop\" of \"jdoe\" is dormant (last handshake 4 months ago) and has been disabled","time":"2026-08-28T08:00:00Z"}
 ```
 Every admin action is recorded on the **Audit** page (`/admin/audit`).
 

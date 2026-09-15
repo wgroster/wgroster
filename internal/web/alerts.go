@@ -13,9 +13,10 @@ import (
 // alertPayload is POSTed to the configured webhook on a state transition.
 type alertPayload struct {
 	Endpoint string `json:"endpoint,omitempty"`
-	User     string `json:"user,omitempty"` // set for user-scoped alerts (orphan)
-	Type     string `json:"type"`           // stale | missing | unlinked | unexpected | mismatch | orphan
-	Status   string `json:"status"`         // firing | resolved
+	User     string `json:"user,omitempty"`    // set for user-scoped alerts (orphan)
+	Machine  string `json:"machine,omitempty"` // set for machine-scoped alerts (dormant)
+	Type     string `json:"type"`              // stale | missing | unlinked | unexpected | mismatch | orphan | dormant
+	Status   string `json:"status"`            // firing | resolved
 	Detail   string `json:"detail"`
 	Time     string `json:"time"`
 }
@@ -43,8 +44,9 @@ func (s *Server) RunAlerts(ctx context.Context) {
 // alertKey identifies one alert: a condition type on a given endpoint.
 type alertKey struct {
 	endpoint string
-	typ      string // stale | missing | unlinked | unexpected | mismatch | orphan
+	typ      string // stale | missing | unlinked | unexpected | mismatch | orphan | dormant
 	user     string // set instead of endpoint for user-scoped alerts (orphan)
+	machine  string // set instead of endpoint for machine-scoped alerts (dormant)
 }
 
 func (s *Server) evalAlerts(ctx context.Context, firing map[alertKey]string) {
@@ -103,7 +105,8 @@ func (s *Server) postAlert(ctx context.Context, key alertKey, status, detail str
 		return
 	}
 	body, _ := json.Marshal(alertPayload{
-		Endpoint: key.endpoint, User: key.user, Type: key.typ, Status: status, Detail: detail,
+		Endpoint: key.endpoint, User: key.user, Machine: key.machine,
+		Type: key.typ, Status: status, Detail: detail,
 		Time: time.Now().Format(time.RFC3339),
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.AlertWebhookURL, bytes.NewReader(body))
