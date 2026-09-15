@@ -16,6 +16,9 @@
         <span class="font-medium text-slate-900 dark:text-slate-100">{{.M.Name}}</span>
         {{if eq .M.Status "pending"}}
           <span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">Pending approval</span>
+        {{else if eq .M.Status "disabled"}}
+          <span class="text-xs rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 cursor-help"
+                title="An administrator has taken this machine out of service">Disabled</span>
         {{else if .Online}}
           <span class="inline-flex items-center gap-1 text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Online</span>
         {{else}}

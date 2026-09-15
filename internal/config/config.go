@@ -84,9 +84,10 @@ type Config struct {
 	// for N consecutive daily checks (0 = check disabled). Requires LDAP.
 	OrphanGraceDays int `yaml:"orphan_grace_days"`
 	// OrphanAction is what happens when the grace period expires: "flag" (the
-	// default) only records and reports it, "disable" also sends the owner's
-	// active machines back to pending, which drops them from the expected peer
-	// list on every concentrator. Re-approval is one click either way.
+	// default) only records and reports it, "disable" also disables the owner's
+	// active machines, which drops them from the expected peer list on every
+	// concentrator. Their address and endpoint links are kept, so enabling them
+	// again is one click either way.
 	OrphanAction string `yaml:"orphan_action"`
 }
 
@@ -94,7 +95,7 @@ type Config struct {
 const (
 	// OrphanFlag reports an offboarded owner without touching their machines.
 	OrphanFlag = "flag"
-	// OrphanDisable additionally sends their active machines back to pending.
+	// OrphanDisable additionally takes their active machines out of service.
 	OrphanDisable = "disable"
 )
 

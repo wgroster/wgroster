@@ -100,6 +100,25 @@ func (s *Store) SetMachinePending(id int64) error {
 	return err
 }
 
+// SetMachineDisabled takes a machine out of service: it drops out of every
+// concentrator's expected peer list while keeping its address, endpoint links
+// and approval record, so re-enabling it is a single write. Unlike sending it
+// back to pending, this does not put it in the review queue, does not count
+// against the owner's pending cap and is never swept by pending expiry.
+func (s *Store) SetMachineDisabled(id int64) error {
+	_, err := s.db.Exec(`UPDATE machine SET status=? WHERE id=?`, StatusDisabled, id)
+	return err
+}
+
+// SetMachineActive puts a disabled machine back into service, recording the
+// administrator who did it. The address and endpoint links it kept while
+// disabled are reused as they are.
+func (s *Store) SetMachineActive(id int64, approvedBy string) error {
+	_, err := s.db.Exec(`UPDATE machine SET status=?, approved_at=?, approved_by=? WHERE id=?`,
+		StatusActive, time.Now().Unix(), approvedBy, id)
+	return err
+}
+
 // UpdateOwnerName refreshes the cached display name on all of a user's machines
 // (called at login so it stays current and backfills older rows).
 func (s *Store) UpdateOwnerName(uid, name string) error {
@@ -121,7 +140,9 @@ func (s *Store) ListMachinesByOwner(uid string) ([]*Machine, error) {
 }
 
 func (s *Store) ListMachines() ([]*Machine, error) {
-	return s.queryMachines(`SELECT ` + machineCols + ` FROM machine ORDER BY status='active', owner_uid, name`)
+	// Pending first (they need a decision), then active, then disabled.
+	return s.queryMachines(`SELECT ` + machineCols + ` FROM machine
+		ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, owner_uid, name`)
 }
 
 func (s *Store) queryMachines(q string, args ...any) ([]*Machine, error) {
@@ -149,15 +170,29 @@ func (s *Store) DeleteMachine(id int64) error {
 // ApproveMachine assigns an address, links the endpoints and marks the machine
 // active, all in one transaction. approvedBy records the acting administrator.
 func (s *Store) ApproveMachine(id int64, address string, endpointIDs []int64, approvedBy string) error {
+	return s.assign(id, address, endpointIDs, true, approvedBy)
+}
+
+// SetMachineAssignment updates a machine's address and endpoint links without
+// touching its status, so editing a disabled machine does not silently put it
+// back into service.
+func (s *Store) SetMachineAssignment(id int64, address string, endpointIDs []int64) error {
+	return s.assign(id, address, endpointIDs, false, "")
+}
+
+func (s *Store) assign(id int64, address string, endpointIDs []int64, activate bool, approvedBy string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	now := time.Now().Unix()
-	if _, err := tx.Exec(`UPDATE machine SET address=?, status=?, approved_at=?, approved_by=? WHERE id=?`,
-		address, StatusActive, now, approvedBy, id); err != nil {
+	if activate {
+		if _, err := tx.Exec(`UPDATE machine SET address=?, status=?, approved_at=?, approved_by=? WHERE id=?`,
+			address, StatusActive, time.Now().Unix(), approvedBy, id); err != nil {
+			return err
+		}
+	} else if _, err := tx.Exec(`UPDATE machine SET address=? WHERE id=?`, address, id); err != nil {
 		return err
 	}
 	if err := replaceEndpoints(tx, id, endpointIDs); err != nil {

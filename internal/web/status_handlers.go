@@ -33,6 +33,7 @@ type peerStatus struct {
 	Address         string // address assigned by the portal
 	State           string
 	Pending         bool   // known machine still awaiting approval (unlinked only)
+	Disabled        bool   // known machine taken out of service (unlinked only)
 	RemoteEndpoint  string // remote IP:port as seen by the hub
 	HubAllowedIPs   string // allowed-ips as seen by the hub (server side)
 	AddrMismatch    bool   // hub allowed-ips does not cover the assigned address
@@ -166,7 +167,9 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 		// Reported peers the portal does not expect here. Two very different
 		// cases, kept apart because they call for different fixes: a key the
 		// portal knows (unlinked → link/approve the machine) versus a key it has
-		// never seen (extra → adopt it or clean up the hub).
+		// never seen (extra → adopt it or clean up the hub). A disabled machine
+		// still carried by the hub shows up here too: the portal stopped
+		// expecting it, and the drift is real until the concentrator drops it.
 		for _, p := range reported {
 			if expectedKeys[p.PublicKey] {
 				continue
@@ -187,6 +190,7 @@ func (s *Server) buildStatus() ([]endpointStatus, error) {
 				setOwner(&ps, m)
 				ps.AddrMismatch = m.Address != "" && p.AllowedIPs != "" && !allowedCovers(p.AllowedIPs, m.Address)
 				ps.Pending = m.Status == store.StatusPending
+				ps.Disabled = m.Status == store.StatusDisabled
 				ps.State = statePeerUnlinked
 				es.Unlinked++
 			} else {

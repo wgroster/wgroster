@@ -72,13 +72,14 @@ type adminMachineView struct {
 
 // userGroup gathers one user's machines for the admin view.
 type userGroup struct {
-	UID      string
-	Name     string // display name (cn), falls back to uid
-	HasPhoto bool   // a directory photo is cached (served at /avatar/{uid})
-	Machines []adminMachineView
-	Total    int
-	OnlineN  int
-	PendingN int
+	UID       string
+	Name      string // display name (cn), falls back to uid
+	HasPhoto  bool   // a directory photo is cached (served at /avatar/{uid})
+	Machines  []adminMachineView
+	Total     int
+	OnlineN   int
+	PendingN  int
+	DisabledN int
 	// Orphaned reports that the directory no longer knows this owner and the
 	// grace period has expired; AbsentSince is when the first absence was seen.
 	Orphaned    bool
@@ -169,8 +170,11 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		if mv.Online {
 			g.OnlineN++
 		}
-		if mv.M.Status == store.StatusPending {
+		switch mv.M.Status {
+		case store.StatusPending:
 			g.PendingN++
+		case store.StatusDisabled:
+			g.DisabledN++
 		}
 	}
 	sort.Strings(order)
@@ -181,9 +185,9 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		g := byUID[uid]
 		sort.SliceStable(g.Machines, func(i, j int) bool {
 			a, b := g.Machines[i], g.Machines[j]
-			ap, bp := a.M.Status == store.StatusPending, b.M.Status == store.StatusPending
-			if ap != bp {
-				return ap
+			ar, br := store.StatusRank(a.M.Status), store.StatusRank(b.M.Status)
+			if ar != br {
+				return ar < br
 			}
 			return a.M.Name < b.M.Name
 		})
@@ -310,12 +314,86 @@ func (s *Server) handleUpdateMachine(w http.ResponseWriter, r *http.Request) {
 		redirectMsg(w, r, "/admin/machines", "err", "Could not save (public key already used?)")
 		return
 	}
+	// Saving the form activates the machine — that is what approving a pending
+	// one means. A disabled machine is the exception: taking it out of service
+	// was a deliberate act, so an edit keeps it out until it is enabled again.
+	if m.Status == store.StatusDisabled {
+		if err := s.store.SetMachineAssignment(id, address, endpointIDs); err != nil {
+			s.serverError(w, err)
+			return
+		}
+		s.audit(r, "machine.update", m.OwnerUID+"/"+name)
+		redirectMsg(w, r, "/admin/machines", "ok", "Machine "+name+" saved — still disabled")
+		return
+	}
 	if err := s.store.ApproveMachine(id, address, endpointIDs, sessionFrom(r).UID); err != nil {
 		s.serverError(w, err)
 		return
 	}
 	s.audit(r, "machine.update", m.OwnerUID+"/"+name)
 	redirectMsg(w, r, "/admin/machines", "ok", "Machine "+name+" saved ("+address+")")
+}
+
+// handleDisableMachine takes a machine out of service without deleting it: it
+// leaves every concentrator's expected peer list on the next pull, but keeps its
+// address, endpoint links and history so enabling it again is one click.
+func (s *Server) handleDisableMachine(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	m, err := s.store.GetMachine(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if m.Status == store.StatusDisabled {
+		redirectMsg(w, r, "/admin/machines", "ok", "Machine "+m.Name+" is already disabled")
+		return
+	}
+	if err := s.store.SetMachineDisabled(id); err != nil {
+		s.serverError(w, err)
+		return
+	}
+	s.audit(r, "machine.disable", m.OwnerUID+"/"+m.Name)
+	redirectMsg(w, r, "/admin/machines", "ok", "Machine "+m.Name+" disabled — it drops out of the expected peer list")
+}
+
+// handleEnableMachine puts a disabled machine back into service.
+func (s *Server) handleEnableMachine(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	m, err := s.store.GetMachine(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if m.Status != store.StatusDisabled {
+		redirectMsg(w, r, "/admin/machines", "err", "Only a disabled machine can be enabled — review a pending one instead")
+		return
+	}
+	// A machine disabled before it was ever approved (or whose endpoint was
+	// deleted meanwhile) has nothing to be activated with; say so rather than
+	// producing an active machine that no concentrator can serve.
+	eps, err := s.store.EndpointIDsForMachine(id)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	if m.Address == "" || len(eps) == 0 {
+		redirectMsg(w, r, "/admin/machines", "err", "Assign an address and at least one endpoint before enabling "+m.Name)
+		return
+	}
+	if err := s.store.SetMachineActive(id, sessionFrom(r).UID); err != nil {
+		s.serverError(w, err)
+		return
+	}
+	s.audit(r, "machine.enable", m.OwnerUID+"/"+m.Name)
+	redirectMsg(w, r, "/admin/machines", "ok", "Machine "+m.Name+" enabled")
 }
 
 func (s *Server) handleAdminDeleteMachine(w http.ResponseWriter, r *http.Request) {

@@ -81,9 +81,11 @@ audit_retention_days: 0
 orphan_grace_days: 0
 # What happens when the grace period expires:
 #   flag    — report only, machines keep working (default)
-#   disable — also send the owner's active machines back to pending, which drops
-#             them from every concentrator's expected peer list. Their address
-#             and endpoint links are kept, so re-approval is one click.
+#   disable — also disable the owner's active machines, which drops them from
+#             every concentrator's expected peer list. Their address and endpoint
+#             links are kept, so enabling them again is one click. Disabled is a
+#             status of its own: such a machine is not in the review queue and is
+#             never removed by pending_expiry_days.
 # The check refuses to act on a round where no owner could be confirmed present,
 # or where a majority look absent — a broken search account or bind_dn_pattern
 # makes everyone look gone, and that must not disconnect the fleet.

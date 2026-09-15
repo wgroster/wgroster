@@ -36,6 +36,9 @@ concentrator).
   `AllowedIPs`, DNS, MTU and keepalive; each gets a rotatable **upload token**
   and a downloadable **concentrator `wg0.conf`** (interface + all peers).
 - Approve pending machines, or **create & activate** a machine directly.
+- **Disable** a machine to take it out of service without deleting it: it leaves
+  every concentrator's expected peer list but keeps its address, endpoint links
+  and history, so enabling it again is one click.
 - IP addresses from a global pool with **next-free suggestion** and uniqueness
   validation; link a machine to **one or more endpoints** (multi-site).
 - Edit everything (name, key, address, endpoints) from a clean modal.
@@ -54,8 +57,8 @@ concentrator).
 - Once a day the portal asks the directory whether every machine owner still
   exists. An account that stays gone for `orphan_grace_days` is flagged on the
   machines page, in the audit log and on the alert webhook — and, with
-  `orphan_action: disable`, its machines drop out of every concentrator's
-  expected peer list.
+  `orphan_action: disable`, its machines are **disabled** and drop out of every
+  concentrator's expected peer list.
 
 **Observability**
 - Live **status dashboard** (auto-refresh) with per-peer **throughput**.
@@ -276,16 +279,16 @@ directory once a day whether each machine owner still has an entry:
 
 ```yaml
 orphan_grace_days: 7      # consecutive days absent before acting
-orphan_action: "flag"     # flag (report only) | disable (send machines back to pending)
+orphan_action: "flag"     # flag (report only) | disable (take machines out of service)
 ```
 
 - **flag** (default) — the owner gets a *Not in directory* badge on the machines
   page, an `owner.orphaned` entry in the audit log and an alert webhook. Nothing
   else changes: you decide what to do.
-- **disable** — additionally sends the owner's active machines back to
-  **pending**, which removes them from `expected-peers` on every concentrator
-  (the agent then drops the peer on its next run). The address and endpoint
-  links are kept, so if the account comes back it is one click to re-approve.
+- **disable** — additionally marks the owner's active machines **disabled**,
+  which removes them from `expected-peers` on every concentrator (the agent then
+  drops the peer on its next run). The address and endpoint links are kept, so if
+  the account comes back it is one click to enable them again.
 
 The failure mode that matters here is the *false* positive, so the check is
 built to fail safe:
@@ -302,9 +305,13 @@ built to fail safe:
   disconnect the fleet. A portal with a single machine owner therefore never
   flags — there is no second owner to corroborate the directory.
 
-Machines sent back to pending are subject to `pending_expiry_days` like any
-other, counted from the moment they entered the queue (not from their creation),
-so you get the full review window before the address is freed.
+Disabled is a status of its own, deliberately not "pending": an offboarded
+device is not awaiting review, so it stays out of the queue, out of
+`max_pending_per_user` and out of `pending_expiry_days` — its address is never
+silently freed while the account is gone. Machines that *are* sent back to
+pending (a user changing their public key) are subject to `pending_expiry_days`
+like any other, counted from the moment they entered the queue rather than from
+their creation, so you get the full review window before the address is freed.
 
 ## Monitoring & alerting
 
@@ -318,7 +325,7 @@ or an admin session):
 
 - `wg_build_info{version="…"}` — always 1, labelled with the running version.
 - `wg_endpoints_total`, `wg_endpoints_reporting`, `wg_machines_total`,
-  `wg_machines_pending`
+  `wg_machines_pending`, `wg_machines_disabled`
 - `wg_peers_online|offline|missing|unlinked|unexpected{endpoint="…"}` —
   `unlinked` counts reported peers the portal knows but has not activated on that
   endpoint, `unexpected` those with a public key it has never seen.
@@ -344,7 +351,7 @@ An optional **alert webhook** (`alert_webhook_url`) is POSTed on transitions:
 `firing | resolved`. An `orphan` alert carries `user` instead of `endpoint`:
 
 ```json
-{"user":"jdoe","type":"orphan","status":"firing","detail":"owner \"jdoe\" is no longer in the directory (2 machine(s) sent back to pending)","time":"2026-08-28T08:00:00Z"}
+{"user":"jdoe","type":"orphan","status":"firing","detail":"owner \"jdoe\" is no longer in the directory (2 machine(s) disabled)","time":"2026-08-28T08:00:00Z"}
 ```
 Every admin action is recorded on the **Audit** page (`/admin/audit`).
 

@@ -6,7 +6,29 @@ import "time"
 const (
 	StatusPending = "pending"
 	StatusActive  = "active"
+	// StatusDisabled is a machine taken out of service by an administrator or by
+	// the offboarding sweep. It keeps its address, endpoint links and history but
+	// drops out of every concentrator's expected peer list, so re-enabling it is
+	// one click. It is deliberately distinct from pending, which means "awaiting
+	// a first look": a disabled machine stays out of the review queue, out of the
+	// per-user pending cap and out of the pending-expiry sweep, none of which
+	// should apply to a device that was already approved once.
+	StatusDisabled = "disabled"
 )
+
+// StatusRank orders the statuses the way every listing shows them: what needs
+// an administrator's attention first, then what is in service, then what was
+// taken out of it.
+func StatusRank(status string) int {
+	switch status {
+	case StatusPending:
+		return 0
+	case StatusActive:
+		return 1
+	default:
+		return 2
+	}
+}
 
 // Endpoint is a VPN concentrator declared by an administrator.
 type Endpoint struct {

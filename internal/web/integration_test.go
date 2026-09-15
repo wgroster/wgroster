@@ -1271,3 +1271,120 @@ func TestStatusTableShowsMachineIcons(t *testing.T) {
 		t.Errorf("expected exactly 1 device icon in the table, got %d", n)
 	}
 }
+
+// A disabled machine is out of service but not forgotten: it leaves every
+// concentrator's expected peer list while keeping its address and endpoint
+// links, stays out of the review queue, and its config is no longer served.
+func TestDisableAndEnableMachine(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)},
+		"host_port": {"vpn-par:51820"}, "allowed_ips": {"192.168.1.0/24"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: got %d (%s)", w.Code, w.Body)
+	}
+	eps, _ := srv.store.ListEndpoints()
+	ep := eps[0]
+
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: got %d (%s)", w.Code, w.Body)
+	}
+	machines, _ := srv.store.ListMachines()
+	mID := machines[0].ID
+
+	// Disable it.
+	w = do(t, h, "POST", fmt.Sprintf("/admin/machines/%d/disable", mID), cookies, url.Values{"csrf": {csrf}})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("disable: got %d (%s)", w.Code, w.Body)
+	}
+	m, err := srv.store.GetMachine(mID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Status != store.StatusDisabled {
+		t.Fatalf("status = %q, want %q", m.Status, store.StatusDisabled)
+	}
+	if m.Address != "10.0.0.5" {
+		t.Errorf("address = %q, want it kept", m.Address)
+	}
+	if peers, err := srv.store.ActiveMachinesForEndpoint(ep.ID); err != nil || len(peers) != 0 {
+		t.Errorf("expected peers = %d, err %v, want 0", len(peers), err)
+	}
+	if n, err := srv.store.CountPendingByOwner("alice"); err != nil || n != 0 {
+		t.Errorf("pending count = %d, err %v, want 0", n, err)
+	}
+
+	// The concentrator's own config no longer carries it either.
+	w = do(t, h, "GET", fmt.Sprintf("/admin/endpoints/%d/config", ep.ID), cookies, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("endpoint config: got %d", w.Code)
+	}
+	if strings.Contains(w.Body.String(), key(1)) {
+		t.Error("disabled machine still present in the concentrator config")
+	}
+
+	// Its owner cannot pull a config any more.
+	w = do(t, h, "GET", fmt.Sprintf("/machines/%d/config", mID), cookies, nil)
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "disabled") {
+		t.Errorf("config while disabled: got %d %q", w.Code, w.Header().Get("Location"))
+	}
+
+	// Editing it does not quietly put it back into service.
+	w = do(t, h, "POST", fmt.Sprintf("/admin/machines/%d", mID), cookies, url.Values{
+		"csrf": {csrf}, "name": {"laptop2"}, "public_key": {key(1)},
+		"address": {"10.0.0.6"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("edit while disabled: got %d (%s)", w.Code, w.Body)
+	}
+	m, _ = srv.store.GetMachine(mID)
+	if m.Status != store.StatusDisabled {
+		t.Errorf("edit re-activated a disabled machine: status = %q", m.Status)
+	}
+	if m.Address != "10.0.0.6" {
+		t.Errorf("address = %q, want the edit applied", m.Address)
+	}
+
+	// Enable it again.
+	w = do(t, h, "POST", fmt.Sprintf("/admin/machines/%d/enable", mID), cookies, url.Values{"csrf": {csrf}})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("enable: got %d (%s)", w.Code, w.Body)
+	}
+	m, _ = srv.store.GetMachine(mID)
+	if m.Status != store.StatusActive {
+		t.Fatalf("status after enable = %q, want %q", m.Status, store.StatusActive)
+	}
+	if peers, err := srv.store.ActiveMachinesForEndpoint(ep.ID); err != nil || len(peers) != 1 {
+		t.Errorf("expected peers after enable = %d, err %v, want 1", len(peers), err)
+	}
+}
+
+// Enabling only applies to a disabled machine — a pending one goes through
+// review, where an address and endpoints are assigned.
+func TestEnableRejectsPendingMachine(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	w := do(t, h, "POST", "/machines", cookies, url.Values{
+		"csrf": {csrf}, "name": {"laptop"}, "public_key": {key(1)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("add machine: got %d", w.Code)
+	}
+	machines, _ := srv.store.ListMachines()
+	mID := machines[0].ID
+
+	w = do(t, h, "POST", fmt.Sprintf("/admin/machines/%d/enable", mID), cookies, url.Values{"csrf": {csrf}})
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "err=") {
+		t.Errorf("enable a pending machine: got %d %q, want an error redirect", w.Code, w.Header().Get("Location"))
+	}
+	m, _ := srv.store.GetMachine(mID)
+	if m.Status != store.StatusPending {
+		t.Errorf("status = %q, want it untouched", m.Status)
+	}
+}

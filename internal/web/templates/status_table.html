@@ -106,7 +106,8 @@
           {{else if eq .State "offline"}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">offline</span>
           {{else if eq .State "missing"}}<span class="text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5">missing on hub</span>
           {{else if eq .State "unlinked"}}
-            {{if .Pending}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 cursor-help" title="Registered in the portal but awaiting approval — open the row to approve it">pending approval</span>
+            {{if .Disabled}}<span class="text-xs rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 cursor-help" title="Disabled in the portal, still configured on the hub — remove it there, or enable the machine again">disabled</span>
+            {{else if .Pending}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 cursor-help" title="Registered in the portal but awaiting approval — open the row to approve it">pending approval</span>
             {{else}}<span class="text-xs rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 cursor-help" title="Registered in the portal but not linked to this endpoint — open the row to link it">not linked here</span>{{end}}
           {{else}}<span class="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 cursor-help" title="Unknown public key — open the row to adopt this peer">unexpected</span>{{end}}
         </td>

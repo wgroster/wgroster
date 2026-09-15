@@ -385,7 +385,8 @@
         var okFilter = filter === "all" ||
           (filter === "pending" && st === "pending") ||
           (filter === "online" && on) ||
-          (filter === "offline" && st === "active" && !on);
+          (filter === "offline" && st === "active" && !on) ||
+          (filter === "disabled" && st === "disabled");
         var show = okText && okFilter;
         el.style.display = show ? "" : "none";
         if (show) visibleCount++;

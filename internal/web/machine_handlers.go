@@ -127,6 +127,10 @@ func (s *Server) handleMachineConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if m.Status == store.StatusDisabled {
+		redirectMsg(w, r, "/", "err", "This machine has been disabled — ask an administrator")
+		return
+	}
 	if m.Status != store.StatusActive {
 		redirectMsg(w, r, "/", "err", "This machine is not approved yet")
 		return

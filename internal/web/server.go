@@ -133,6 +133,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin/machines", s.admin(s.handleAdminMachines))
 	mux.HandleFunc("POST /admin/machines", s.admin(s.handleAdminCreateMachine))
 	mux.HandleFunc("POST /admin/machines/{id}", s.admin(s.handleUpdateMachine))
+	mux.HandleFunc("POST /admin/machines/{id}/disable", s.admin(s.handleDisableMachine))
+	mux.HandleFunc("POST /admin/machines/{id}/enable", s.admin(s.handleEnableMachine))
 	mux.HandleFunc("POST /admin/machines/{id}/delete", s.admin(s.handleAdminDeleteMachine))
 	mux.HandleFunc("GET /admin/endpoints", s.admin(s.handleAdminEndpoints))
 	mux.HandleFunc("POST /admin/endpoints", s.admin(s.handleCreateEndpoint))

@@ -141,14 +141,22 @@ func TestOrphanOwnerDisableRemovesPeerFromEndpoint(t *testing.T) {
 	if len(peers) != 0 {
 		t.Errorf("after: %d peer(s) still expected on the hub, want 0", len(peers))
 	}
-	// The machine is kept (address and endpoint links intact) so re-approval is
-	// one click if the account comes back.
+	// The machine is kept (address and endpoint links intact) so re-enabling is
+	// one click if the account comes back. It is disabled, not sent back to
+	// pending: an offboarded device is not awaiting review, and pending expiry
+	// would eventually delete it and release its address.
 	got, err := srv.store.GetMachine(m.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != store.StatusPending {
-		t.Errorf("status = %q, want %q", got.Status, store.StatusPending)
+	if got.Status != store.StatusDisabled {
+		t.Errorf("status = %q, want %q", got.Status, store.StatusDisabled)
+	}
+	if n, err := srv.store.CountPendingByOwner("gone"); err != nil || n != 0 {
+		t.Errorf("pending count = %d, err %v, want 0 (a disabled machine is not in the review queue)", n, err)
+	}
+	if n, err := srv.store.DeleteExpiredPending(time.Now().Add(time.Hour)); err != nil || n != 0 {
+		t.Errorf("pending expiry deleted %d machine(s), err %v, want 0", n, err)
 	}
 	if got.Address != "10.0.0.5" {
 		t.Errorf("address = %q, want it kept", got.Address)

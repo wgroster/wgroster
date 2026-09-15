@@ -8,7 +8,8 @@
       {{else if eq .State "offline"}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">offline</span>
       {{else if eq .State "missing"}}<span class="text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5">missing on hub</span>
       {{else if eq .State "unlinked"}}
-        {{if .Pending}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">pending approval</span>
+        {{if .Disabled}}<span class="text-xs rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5">disabled</span>
+        {{else if .Pending}}<span class="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">pending approval</span>
         {{else}}<span class="text-xs rounded-full bg-sky-100 text-sky-700 px-2 py-0.5">not linked here</span>{{end}}
       {{else if eq .State "extra"}}<span class="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5">unexpected</span>{{end}}
     </div>
@@ -50,9 +51,10 @@
 </div>
 {{else if eq .State "unlinked"}}
 <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-sky-50 dark:bg-sky-950/30">
-  <h4 class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{{if .Pending}}Approve this machine{{else}}Link to {{.EndpointName}}{{end}}</h4>
+  <h4 class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{{if .Disabled}}Re-enable this machine{{else if .Pending}}Approve this machine{{else}}Link to {{.EndpointName}}{{end}}</h4>
   <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-    {{if .Pending}}This machine is registered in the portal but still awaiting approval, while the hub already
+    {{if .Disabled}}This machine was taken out of service in the portal, but the hub still carries its key — it keeps
+    working until the concentrator drops it. Remove the peer there, or put the machine back into service here.{{else if .Pending}}This machine is registered in the portal but still awaiting approval, while the hub already
     carries its key.{{else}}This machine is registered in the portal but not linked to {{.EndpointName}}{{if .Endpoints}} (only {{range $i, $n := .Endpoints}}{{if $i}}, {{end}}{{$n}}{{end}}){{end}}, while the hub
     already carries its key.{{end}} Activating it here makes the portal match what is deployed.
   </p>
@@ -65,7 +67,7 @@
     {{if and .AddrMismatch .HubAllowedIPs}}
       <p class="text-[11px] text-amber-700 dark:text-amber-500">The hub announces {{.HubAllowedIPs}} for this key. Keep the portal address and update the concentrator, or enter the hub's address here if that is the correct one.</p>
     {{end}}
-    <button class="w-full rounded-lg px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">{{if .Pending}}Approve &amp; link to {{.EndpointName}}{{else}}Link to {{.EndpointName}}{{end}}</button>
+    <button class="w-full rounded-lg px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">{{if .Disabled}}Enable &amp; link to {{.EndpointName}}{{else if .Pending}}Approve &amp; link to {{.EndpointName}}{{else}}Link to {{.EndpointName}}{{end}}</button>
   </form>
 </div>
 {{end}}

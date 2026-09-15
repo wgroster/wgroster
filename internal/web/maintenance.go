@@ -206,7 +206,7 @@ func (s *Server) orphanOwner(ctx context.Context, uid string, now time.Time) {
 		if s.cfg.OrphanAction != config.OrphanDisable {
 			continue
 		}
-		if err := s.store.SetMachinePending(m.ID); err != nil {
+		if err := s.store.SetMachineDisabled(m.ID); err != nil {
 			log.Printf("orphan check: disable machine %d of %q: %v", m.ID, uid, err)
 			continue
 		}
@@ -226,7 +226,7 @@ func (s *Server) orphanOwner(ctx context.Context, uid string, now time.Time) {
 
 	detail := fmt.Sprintf("owner %q is no longer in the directory (%d active machine(s))", uid, active)
 	if disabled > 0 {
-		detail = fmt.Sprintf("owner %q is no longer in the directory (%d machine(s) sent back to pending)", uid, disabled)
+		detail = fmt.Sprintf("owner %q is no longer in the directory (%d machine(s) disabled)", uid, disabled)
 	}
 	log.Printf("orphan check: %s", detail)
 	s.systemAudit("owner.orphaned", uid)

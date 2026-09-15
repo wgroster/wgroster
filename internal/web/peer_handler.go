@@ -32,6 +32,7 @@ type peerDetail struct {
 	State          string
 	MachineID      int64  // 0 when the public key is unknown to the portal
 	Pending        bool   // the machine exists but awaits approval
+	Disabled       bool   // the machine exists but was taken out of service
 	LinkedHere     bool   // the machine is linked to this endpoint
 	Suggested      string // address prefilled in the adopt/link form
 	SuggestedIsHub bool   // Suggested is the address the hub already announces
@@ -94,6 +95,7 @@ func (s *Server) handlePeerDetail(w http.ResponseWriter, r *http.Request) {
 	if m, err := s.store.MachineByPublicKey(key); err == nil {
 		d.MachineID = m.ID
 		d.Pending = m.Status == store.StatusPending
+		d.Disabled = m.Status == store.StatusDisabled
 		d.Name = m.Name
 		d.Icon = m.Icon
 		d.Owner = m.OwnerDisplay()
@@ -109,7 +111,7 @@ func (s *Server) handlePeerDetail(w http.ResponseWriter, r *http.Request) {
 		if reported == nil {
 			// Nothing reported here: only meaningful for a machine the portal
 			// does expect on this endpoint.
-			if d.Pending || !d.LinkedHere {
+			if d.Pending || d.Disabled || !d.LinkedHere {
 				http.NotFound(w, r)
 				return
 			}
@@ -128,7 +130,7 @@ func (s *Server) handlePeerDetail(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case d.MachineID == 0:
 			d.State = statePeerExtra
-		case d.Pending || !d.LinkedHere:
+		case d.Pending || d.Disabled || !d.LinkedHere:
 			// Reported by the hub, known to the portal, but not expected here —
 			// same classification as the status table (see buildStatus).
 			d.State = statePeerUnlinked
