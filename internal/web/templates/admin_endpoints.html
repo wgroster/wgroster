@@ -26,7 +26,8 @@
     <fieldset class="space-y-4">
       <legend class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Routing &amp; options</legend>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">AllowedIPs (networks behind this endpoint)
-        <input name="allowed_ips" placeholder="10.0.0.0/8, 192.168.1.0/24" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"></label>
+        <input name="allowed_ips" placeholder="10.0.0.0/8, 192.168.1.0/24" class="mt-1 w-full font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-emerald-500">
+        <span class="mt-1 block text-xs text-slate-400 dark:text-slate-500">Empty means 0.0.0.0/0 (full tunnel). Endpoints a machine uses together must not overlap — WireGuard routes each network through a single peer.</span></label>
       <div class="grid sm:grid-cols-4 gap-4">
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">DNS
           <input name="dns" placeholder="10.0.0.1" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2"></label>

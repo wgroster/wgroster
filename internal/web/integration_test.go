@@ -748,9 +748,15 @@ func TestAdoptUnexpectedPeer(t *testing.T) {
 // the portal knows, but the machine is not active on that endpoint.
 func TestLinkUnlinkedPeer(t *testing.T) {
 	srv, h, cookies, csrf := testServer(t)
-	for i, name := range []string{"paris", "lyon"} {
+	// Two sites a machine can legitimately use at once: their AllowedIPs are
+	// disjoint, so each route belongs to exactly one tunnel.
+	for i, ep := range []struct{ name, allowed string }{
+		{"paris", "192.168.1.0/24"},
+		{"lyon", "192.168.2.0/24"},
+	} {
 		do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
-			"csrf": {csrf}, "name": {name}, "public_key": {key(byte(20 + i))}, "host_port": {"vpn:51820"},
+			"csrf": {csrf}, "name": {ep.name}, "public_key": {key(byte(20 + i))},
+			"host_port": {"vpn:51820"}, "allowed_ips": {ep.allowed},
 		})
 	}
 	paris, lyon := endpointByName(t, srv, "paris"), endpointByName(t, srv, "lyon")
@@ -1386,5 +1392,125 @@ func TestEnableRejectsPendingMachine(t *testing.T) {
 	m, _ := srv.store.GetMachine(mID)
 	if m.Status != store.StatusPending {
 		t.Errorf("status = %q, want it untouched", m.Status)
+	}
+}
+
+// The portal never talks to a concentrator, so a malformed endpoint field is
+// only ever discovered by the client that refuses the generated config. Catch it
+// at the form instead.
+func TestEndpointFieldValidation(t *testing.T) {
+	_, h, cookies, csrf := testServer(t)
+	base := func() url.Values {
+		return url.Values{
+			"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+		}
+	}
+	tests := []struct {
+		name  string
+		field string
+		value string
+		want  string
+	}{
+		{"allowed IPs typo", "allowed_ips", "192.168.1.0/24, 10.0.0.0/8x", "allowed+IPs"},
+		{"allowed IPs range", "allowed_ips", "10.0.0.0-10.0.0.255", "allowed+IPs"},
+		{"prefix too long", "allowed_ips", "10.0.0.0/33", "allowed+IPs"},
+		{"host without port", "host_port", "vpn.example.com", "host%3Aport"},
+		{"port out of range", "host_port", "vpn.example.com:99999", "valid+port"},
+		{"dns typo", "dns", "1.1.1.1, 300.1.1.1 ", "DNS"},
+		{"tunnel ip typo", "tunnel_ip", "10.0.0.256", "tunnel+IP"},
+		{"mtu out of range", "mtu", "42", "MTU"},
+		{"keepalive out of range", "persistent_keepalive", "99999", "keepalive"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			form := base()
+			form.Set(tc.field, tc.value)
+			w := do(t, h, "POST", "/admin/endpoints", cookies, form)
+			loc := w.Header().Get("Location")
+			if w.Code != http.StatusSeeOther || !strings.Contains(loc, "err=") {
+				t.Fatalf("got %d %q, want an error redirect", w.Code, loc)
+			}
+			if !strings.Contains(loc, tc.want) {
+				t.Errorf("error = %q, want it to mention %q", loc, tc.want)
+			}
+		})
+	}
+
+	// A valid endpoint still goes through, including IPv6 and a search domain.
+	form := base()
+	form.Set("name", "lyon")
+	form.Set("allowed_ips", "192.168.1.0/24, fd00::/8, 10.0.0.5")
+	form.Set("dns", "1.1.1.1, corp.example.com")
+	form.Set("mtu", "1420")
+	form.Set("persistent_keepalive", "25")
+	w := do(t, h, "POST", "/admin/endpoints", cookies, form)
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "ok=") {
+		t.Errorf("valid endpoint refused: %d %q", w.Code, w.Header().Get("Location"))
+	}
+}
+
+// A machine gets one [Peer] per endpoint in a single config, and WireGuard
+// routes each allowed IP to exactly one of them: overlapping endpoints cannot be
+// combined, whichever end the overlap is introduced from.
+func TestOverlappingEndpointsCannotBeCombined(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	mk := func(name, allowed string, k byte) *store.Endpoint {
+		t.Helper()
+		w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+			"csrf": {csrf}, "name": {name}, "public_key": {key(k)},
+			"host_port": {"vpn:51820"}, "allowed_ips": {allowed},
+		})
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("create %s: %d (%s)", name, w.Code, w.Body)
+		}
+		return endpointByName(t, srv, name)
+	}
+	paris := mk("paris", "192.168.1.0/24", 20)
+	lyon := mk("lyon", "192.168.2.0/24", 21)
+	everything := mk("everything", "", 22) // empty means 0.0.0.0/0
+
+	// Disjoint sites: fine.
+	w := do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(paris.ID), fmt.Sprint(lyon.ID)},
+	})
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "ok=") {
+		t.Fatalf("disjoint endpoints refused: %d %q", w.Code, w.Header().Get("Location"))
+	}
+
+	// One of them routing everything: refused, and the message names both.
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"bob"}, "name": {"laptop"}, "public_key": {key(2)},
+		"address": {"10.0.0.6"}, "endpoint_ids": {fmt.Sprint(paris.ID), fmt.Sprint(everything.ID)},
+	})
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "err=") || !strings.Contains(loc, "paris") || !strings.Contains(loc, "everything") {
+		t.Errorf("overlapping endpoints accepted or badly reported: %q", loc)
+	}
+	if machines, _ := srv.store.ListMachines(); len(machines) != 1 {
+		t.Errorf("machine created despite the conflict: %d machines", len(machines))
+	}
+
+	// The same conflict introduced from the endpoint side is refused too: lyon is
+	// already combined with paris, so it cannot grow to cover paris's network.
+	w = do(t, h, "POST", fmt.Sprintf("/admin/endpoints/%d", lyon.ID), cookies, url.Values{
+		"csrf": {csrf}, "name": {"lyon"}, "public_key": {key(21)},
+		"host_port": {"vpn:51820"}, "allowed_ips": {"192.168.0.0/16"},
+	})
+	loc = w.Header().Get("Location")
+	if !strings.Contains(loc, "err=") || !strings.Contains(loc, "alice") {
+		t.Errorf("widening an endpoint into a conflict was accepted: %q", loc)
+	}
+	if got := endpointByName(t, srv, "lyon"); got.AllowedIPs != "192.168.2.0/24" {
+		t.Errorf("allowed IPs = %q, want the edit rejected", got.AllowedIPs)
+	}
+
+	// Narrowing it elsewhere is still allowed.
+	w = do(t, h, "POST", fmt.Sprintf("/admin/endpoints/%d", lyon.ID), cookies, url.Values{
+		"csrf": {csrf}, "name": {"lyon"}, "public_key": {key(21)},
+		"host_port": {"vpn:51820"}, "allowed_ips": {"192.168.2.0/25"},
+	})
+	if !strings.Contains(w.Header().Get("Location"), "ok=") {
+		t.Errorf("a harmless endpoint edit was refused: %q", w.Header().Get("Location"))
 	}
 }

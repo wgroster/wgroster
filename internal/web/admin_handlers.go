@@ -2,8 +2,10 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -251,6 +253,15 @@ func (s *Server) handleAdminCreateMachine(w http.ResponseWriter, r *http.Request
 		redirectMsg(w, r, "/admin/machines", "err", "Select at least one endpoint")
 		return
 	}
+	conflict, err := s.allowedIPsConflict(endpointIDs)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	if conflict != "" {
+		redirectMsg(w, r, "/admin/machines", "err", conflict)
+		return
+	}
 	used, err := s.store.UsedAddresses()
 	if err != nil {
 		s.serverError(w, err)
@@ -305,6 +316,15 @@ func (s *Server) handleUpdateMachine(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(endpointIDs) == 0 {
 		redirectMsg(w, r, "/admin/machines", "err", "Select at least one endpoint")
+		return
+	}
+	conflict, err := s.allowedIPsConflict(endpointIDs)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	if conflict != "" {
+		redirectMsg(w, r, "/admin/machines", "err", conflict)
 		return
 	}
 
@@ -498,6 +518,18 @@ func (s *Server) handleUpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 		redirectMsg(w, r, "/admin/endpoints", "err", err.Error())
 		return
 	}
+	// endpointFromForm edited the record in place, so e now holds the pending
+	// AllowedIPs: check them against the machines that already combine this
+	// endpoint with another one before they are stored.
+	conflict, err := s.endpointEditConflict(e)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	if conflict != "" {
+		redirectMsg(w, r, "/admin/endpoints", "err", conflict)
+		return
+	}
 	if err := s.store.UpdateEndpoint(e); err != nil {
 		s.serverError(w, err)
 		return
@@ -598,7 +630,113 @@ func endpointFromForm(r *http.Request, e *store.Endpoint) (*store.Endpoint, erro
 		hasControlChar(e.DNS) || hasControlChar(e.TunnelIP) {
 		return nil, errors.New("endpoint fields must not contain control characters")
 	}
+	// The portal never talks to the concentrator, so nothing else will catch a
+	// malformed value: it is copied verbatim into configs that clients then
+	// refuse, far from here. Check the shape while the administrator is looking.
+	if err := validHostPort(e.HostPort); err != nil {
+		return nil, err
+	}
+	if _, err := wg.ParseAllowedIPs(e.AllowedIPs); err != nil {
+		return nil, fmt.Errorf("allowed IPs: %w", err)
+	}
+	if err := validDNSList(e.DNS); err != nil {
+		return nil, fmt.Errorf("DNS: %w", err)
+	}
+	if e.TunnelIP != "" {
+		if _, err := wg.ParseAllowedIPs(e.TunnelIP); err != nil {
+			return nil, fmt.Errorf("tunnel IP: %w", err)
+		}
+	}
+	if e.MTU != 0 && (e.MTU < 576 || e.MTU > 65535) {
+		return nil, fmt.Errorf("MTU %d is out of range (576-65535, or 0 to leave it unset)", e.MTU)
+	}
+	if e.PersistentKeepalive < 0 || e.PersistentKeepalive > 65535 {
+		return nil, fmt.Errorf("persistent keepalive %d is out of range (0-65535)", e.PersistentKeepalive)
+	}
 	return e, nil
+}
+
+// allowedIPsConflict reports the first pair of endpoints among the given ids
+// whose AllowedIPs overlap, as a message to show the administrator.
+//
+// A machine linked to several endpoints gets one [Peer] per endpoint in a single
+// client config, and WireGuard routes every allowed IP to exactly one of them:
+// overlapping lists mean one of the tunnels silently never receives that
+// traffic. Refusing the link is the only place the portal can catch it, since it
+// never sees the client apply the config.
+func (s *Server) allowedIPsConflict(endpointIDs []int64) (string, error) {
+	return s.conflictAmong(endpointIDs, nil)
+}
+
+// conflictAmong is allowedIPsConflict with one endpoint optionally replaced by a
+// version that has not been stored yet, so an edit can be refused before it
+// breaks the machines already linked to it.
+func (s *Server) conflictAmong(endpointIDs []int64, override *store.Endpoint) (string, error) {
+	if len(endpointIDs) < 2 {
+		return "", nil
+	}
+	type parsed struct {
+		name    string
+		allowed []netip.Prefix
+	}
+	var eps []parsed
+	for _, id := range endpointIDs {
+		e, err := s.store.GetEndpoint(id)
+		if errors.Is(err, store.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		if override != nil && override.ID == id {
+			e = override
+		}
+		allowed, err := wg.AllowedIPsOr(e.AllowedIPs)
+		if err != nil {
+			// Stored before this was validated: not this request's problem.
+			continue
+		}
+		eps = append(eps, parsed{name: e.Name, allowed: allowed})
+	}
+	for i := range eps {
+		for j := i + 1; j < len(eps); j++ {
+			if a, b, ok := wg.Overlap(eps[i].allowed, eps[j].allowed); ok {
+				return fmt.Sprintf("%s (%s) and %s (%s) overlap: a machine cannot use both, "+
+					"WireGuard would route %s through only one of them",
+					eps[i].name, a, eps[j].name, b, a), nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// endpointEditConflict reports the first machine whose endpoint links would
+// become contradictory if e were saved as it stands. Widening an endpoint's
+// AllowedIPs is the other way a multi-site machine's config silently breaks, so
+// the same rule is applied from both ends.
+func (s *Server) endpointEditConflict(e *store.Endpoint) (string, error) {
+	links, err := s.store.EndpointLinks("")
+	if err != nil {
+		return "", err
+	}
+	for machineID, ids := range links {
+		if len(ids) < 2 || !containsID(ids, e.ID) {
+			continue
+		}
+		conflict, err := s.conflictAmong(ids, e)
+		if err != nil {
+			return "", err
+		}
+		if conflict == "" {
+			continue
+		}
+		name := strconv.FormatInt(machineID, 10)
+		if m, err := s.store.GetMachine(machineID); err == nil {
+			name = m.OwnerUID + "/" + m.Name
+		}
+		return fmt.Sprintf("%s is linked to both: %s", name, conflict), nil
+	}
+	return "", nil
 }
 
 func atoiDefault(s string, def int) int {

@@ -1,6 +1,8 @@
 package web
 
 import (
+	"fmt"
+	"net"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -99,6 +101,65 @@ func validName(s string) bool {
 	for _, r := range s {
 		if r == '\n' || r == '\r' || unicode.IsControl(r) {
 			return false
+		}
+	}
+	return true
+}
+
+// validHostPort checks the "host:port" an endpoint is reached at. The host may
+// be a name or a literal IP; the port must be a real port number.
+func validHostPort(hp string) error {
+	host, port, err := net.SplitHostPort(hp)
+	if err != nil {
+		return fmt.Errorf("%q must be host:port (e.g. vpn.example.com:51820)", hp)
+	}
+	if host == "" {
+		return fmt.Errorf("%q has no host part", hp)
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return fmt.Errorf("%q is not a valid port", port)
+	}
+	return nil
+}
+
+// validDNSList checks a WireGuard DNS list. Entries are resolver addresses, but
+// wg-quick also accepts a hostname there as a search domain, so both are allowed
+// — the point is to catch a typo, not to narrow what WireGuard supports.
+func validDNSList(list string) error {
+	for _, part := range strings.Split(list, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, err := netip.ParseAddr(part); err == nil {
+			continue
+		}
+		// Digits and dots only: that was meant to be an address, not a domain —
+		// "300.1.1.1" is a legal hostname but never what anyone typed on purpose.
+		if strings.IndexFunc(part, func(r rune) bool { return r != '.' && (r < '0' || r > '9') }) < 0 {
+			return fmt.Errorf("%q is not a valid DNS server address", part)
+		}
+		if !isHostname(part) {
+			return fmt.Errorf("%q is not a valid DNS server address or search domain", part)
+		}
+	}
+	return nil
+}
+
+func isHostname(s string) bool {
+	if len(s) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(strings.TrimSuffix(s, "."), ".") {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+		for i, r := range label {
+			alnum := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+			if !alnum && !(r == '-' && i > 0 && i < len(label)-1) {
+				return false
+			}
 		}
 	}
 	return true

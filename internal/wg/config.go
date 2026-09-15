@@ -47,7 +47,7 @@ func ClientConfig(m *store.Machine, endpoints []*store.Endpoint) string {
 		b.WriteString(fmt.Sprintf("Endpoint = %s\n", e.HostPort))
 		allowed := e.AllowedIPs
 		if allowed == "" {
-			allowed = "0.0.0.0/0"
+			allowed = DefaultAllowedIPs
 		}
 		b.WriteString(fmt.Sprintf("AllowedIPs = %s\n", allowed))
 		if e.PersistentKeepalive > 0 {

@@ -279,6 +279,15 @@ func (s *Server) handleLinkPeer(w http.ResponseWriter, r *http.Request) {
 	if !containsID(ids, ep.ID) {
 		ids = append(ids, ep.ID)
 	}
+	conflict, err := s.allowedIPsConflict(ids)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	if conflict != "" {
+		redirectMsg(w, r, "/admin/status", "err", conflict)
+		return
+	}
 	if err := s.store.ApproveMachine(m.ID, address, ids, sessionFrom(r).UID); err != nil {
 		s.serverError(w, err)
 		return

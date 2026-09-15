@@ -41,6 +41,10 @@ concentrator).
   and history, so enabling it again is one click.
 - IP addresses from a global pool with **next-free suggestion** and uniqueness
   validation; link a machine to **one or more endpoints** (multi-site).
+- Endpoint fields are validated on the spot (`AllowedIPs`, `host:port`, DNS,
+  tunnel IP, MTU, keepalive), and two endpoints whose `AllowedIPs` **overlap**
+  cannot be combined on one machine — WireGuard would route the shared networks
+  through only one of the peers, leaving the other tunnel silently unused.
 - Edit everything (name, key, address, endpoints) from a clean modal.
 
 **Source of truth & drift detection**
