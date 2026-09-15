@@ -182,6 +182,17 @@ type PeerTraffic struct {
 	Series []int64 // combined rx+tx rate per interval, oldest first
 }
 
+// Moving reports whether anything actually travelled over the window, i.e.
+// whether there is a curve worth drawing rather than a flat line at zero.
+func (t PeerTraffic) Moving() bool {
+	for _, v := range t.Series {
+		if v > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // TrafficByKey returns the recent traffic of every peer of an endpoint, built
 // from its last n+1 reports.
 //

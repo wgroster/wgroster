@@ -74,18 +74,23 @@
                timestamp stays one hover away. */}}
           {{if not $pending}} · <span class="cursor-help" title="{{exact $m.LastHandshake}}">last handshake {{ago $m.LastHandshake}}</span>{{end}}
           {{if $m.RemoteIP}} · from <span class="font-mono text-slate-600 dark:text-slate-400 cursor-help" title="{{$m.RemoteHint}}">{{$m.RemoteIP}}</span>{{end}}
-          {{if $m.Traffic.Series}}
-          <span class="inline-flex items-center gap-1.5 align-middle" title="↓ {{humanBytes $m.Traffic.RxRate}}/s · ↑ {{humanBytes $m.Traffic.TxRate}}/s over the last reports">
+          {{/* Traffic only when there is any — a flat line and two zeroes on
+               every idle machine is noise on a page of mostly idle machines —
+               and only while the hub is still reporting, since a rate from an
+               old report next to an "Unknown" badge claims the opposite. */}}
+          {{if and $m.Traffic.Moving (not $m.HubStale)}}
+          <span class="inline-flex items-center gap-1.5 align-middle whitespace-nowrap" title="↓ {{humanBytes $m.Traffic.RxRate}}/s · ↑ {{humanBytes $m.Traffic.TxRate}}/s over the last reports">
             <span class="text-emerald-500 leading-none">{{sparkMini $m.Traffic.Series}}</span>
-            <span class="text-xs text-slate-500 dark:text-slate-400 font-mono">↓{{humanBytes $m.Traffic.RxRate}}/s ↑{{humanBytes $m.Traffic.TxRate}}/s</span>
+            <span class="text-xs font-mono">↓{{humanBytes $m.Traffic.RxRate}}/s ↑{{humanBytes $m.Traffic.TxRate}}/s</span>
           </span>
           {{end}}
-          · <button type="button" data-copy-text="{{$m.M.PublicKey}}" title="{{$m.M.PublicKey}} — click to copy"
-                    class="font-mono text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">{{shortKey $m.M.PublicKey}}</button>
         </div>
-        {{if and (not $pending) $m.M.ApprovedBy}}
-          <div class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">approved by {{$m.M.ApprovedBy}}{{if not $m.ApprovedAt.IsZero}} · {{ago $m.ApprovedAt}}{{end}}</div>
-        {{end}}
+        {{/* Identity and provenance, below what the machine is doing now. */}}
+        <div class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+          {{if and (not $pending) $m.M.ApprovedBy}}approved by {{$m.M.ApprovedBy}}{{if not $m.ApprovedAt.IsZero}} · {{ago $m.ApprovedAt}}{{end}} · {{end}}
+          <button type="button" data-copy-text="{{$m.M.PublicKey}}" title="{{$m.M.PublicKey}} — click to copy"
+                  class="font-mono hover:text-slate-700 dark:hover:text-slate-300">{{shortKey $m.M.PublicKey}}</button>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         {{/* One button per linked endpoint: the drawer shows a peer *on an

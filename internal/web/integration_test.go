@@ -1724,10 +1724,55 @@ func TestAdminMachinesShowsTraffic(t *testing.T) {
 	}
 
 	body := do(t, h, "GET", "/admin/machines/list", cookies, nil).Body.String()
+	if strings.Contains(body, "? Unknown") {
+		t.Fatal("the hub reported just now, so the row must not read Unknown")
+	}
 	if !strings.Contains(body, "↓100 B/s ↑50 B/s") {
 		t.Error("the row does not show the current transfer rates")
 	}
 	if !strings.Contains(body, "<polyline") {
 		t.Error("the row has no sparkline")
+	}
+}
+
+// A rate computed from reports that stopped arriving is not a current rate:
+// when the hub goes quiet the row says so instead of showing both at once.
+func TestAdminMachinesHidesTrafficWhenHubIsQuiet(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(9)}, "host_port": {"vpn:51820"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: %d", w.Code)
+	}
+	ep := endpointByName(t, srv, "paris")
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: %d (%s)", w.Code, w.Body)
+	}
+
+	// Busy traffic, but the last report is an hour old.
+	old := time.Now().Add(-time.Hour)
+	for i, c := range []struct{ rx, tx int64 }{{0, 0}, {200, 100}, {1200, 600}} {
+		at := old.Add(time.Duration(i) * 10 * time.Second)
+		if err := srv.store.ReplaceStatus(ep.ID, []store.StatusPeer{
+			{PublicKey: key(1), LastHandshake: at, RX: c.rx, TX: c.tx},
+		}, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	body := do(t, h, "GET", "/admin/machines/list", cookies, nil).Body.String()
+	if !strings.Contains(body, "? Unknown") {
+		t.Error("a machine whose hub stopped reporting should not be called offline")
+	}
+	if strings.Contains(body, "B/s") {
+		t.Error("a rate from an old report is not a current rate and must not be shown")
+	}
+	if !strings.Contains(body, "paris last reported") {
+		t.Error("the tooltip should name the silent endpoint")
 	}
 }
