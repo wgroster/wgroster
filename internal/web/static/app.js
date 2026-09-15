@@ -386,7 +386,8 @@
           (filter === "pending" && st === "pending") ||
           (filter === "online" && on) ||
           (filter === "offline" && st === "active" && !on) ||
-          (filter === "disabled" && st === "disabled");
+          (filter === "disabled" && st === "disabled") ||
+          (filter === "dormant" && el.getAttribute("data-dormant") === "1");
         var show = okText && okFilter;
         el.style.display = show ? "" : "none";
         if (show) visibleCount++;

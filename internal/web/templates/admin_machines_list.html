@@ -37,7 +37,10 @@
   {{$disabled := eq $m.M.Status "disabled"}}
   <div class="m-item px-5 py-4 {{if $pending}}bg-amber-50/60 border-l-2 border-amber-400{{else if $disabled}}bg-slate-50 dark:bg-slate-800/40 border-l-2 border-slate-300 dark:border-slate-700{{end}}"
        data-status="{{$m.M.Status}}" data-online="{{if $m.Online}}1{{else}}0{{end}}"
-       data-haystack="{{lower $m.M.Name}} {{lower $m.M.OwnerUID}} {{lower $m.M.OwnerName}}">
+       data-dormant="{{if $m.M.Dormant}}1{{else}}0{{end}}"
+       {{/* Addresses and the key are in the haystack because "who is 10.0.0.7?"
+            and "whose key is this?" are the questions this page gets asked. */}}
+       data-haystack="{{lower $m.M.Name}} {{lower $m.M.OwnerUID}} {{lower $m.M.OwnerName}} {{$m.M.Address}} {{$m.RemoteIP}} {{lower $m.M.PublicKey}}">
     <div class="flex flex-wrap items-center gap-3">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">

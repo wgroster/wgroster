@@ -1604,3 +1604,43 @@ func TestAdminMachinesListFragment(t *testing.T) {
 		t.Error("fragment carries no CSRF token")
 	}
 }
+
+// Owners waiting on an administrator come first, and a row can be found by
+// what an administrator actually knows about it: an address, a key.
+func TestAdminMachinesOrderingAndSearchFields(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(9)}, "host_port": {"vpn:51820"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: %d", w.Code)
+	}
+	ep := endpointByName(t, srv, "paris")
+
+	// alice sorts first but is settled; zoe has a machine awaiting review.
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: %d (%s)", w.Code, w.Body)
+	}
+	m := &store.Machine{OwnerUID: "zoe", Name: "phone", PublicKey: key(2)}
+	if err := srv.store.CreateMachine(m); err != nil {
+		t.Fatal(err)
+	}
+
+	body := do(t, h, "GET", "/admin/machines/list", cookies, nil).Body.String()
+	if strings.Index(body, ">zoe<") > strings.Index(body, ">alice<") {
+		t.Error("the owner with a machine awaiting review should come first")
+	}
+	// The row carries what people search by.
+	for _, want := range []string{"10.0.0.5", strings.ToLower(key(1))} {
+		if !strings.Contains(body, want) {
+			t.Errorf("search haystack missing %q", want)
+		}
+	}
+	if !strings.Contains(body, `data-dormant="0"`) {
+		t.Error("rows carry no dormancy marker for the filter to read")
+	}
+}

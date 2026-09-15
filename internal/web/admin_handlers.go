@@ -95,6 +95,19 @@ type userGroup struct {
 	AbsentSince time.Time
 }
 
+// attention ranks a group by how much it is waiting on an administrator: a
+// decision to take first, then something merely flagged, then nothing.
+func (g *userGroup) attention() int {
+	switch {
+	case g.PendingN > 0 || g.Orphaned:
+		return 0
+	case g.DormantN > 0:
+		return 1
+	default:
+		return 2
+	}
+}
+
 // adminMachinesView is what both the machines page and its htmx fragment
 // render. The CSRF token travels with it because the fragment has no page
 // envelope.
@@ -254,6 +267,14 @@ func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) 
 		totalPending += g.PendingN
 		groups = append(groups, g)
 	}
+	// Owners who need something from an administrator come first: a decision to
+	// take (a machine awaiting review, an account that left the directory), then
+	// a device the dormancy check flagged, then everyone else alphabetically. On
+	// a page that is mostly a long alphabetical wall, what is actionable should
+	// not have to be hunted for.
+	sort.SliceStable(groups, func(i, j int) bool {
+		return groups[i].attention() < groups[j].attention()
+	})
 
 	// Lazily refresh stale/missing profiles in the background (no-op without an
 	// LDAP service account); photos and names appear on a subsequent load.
