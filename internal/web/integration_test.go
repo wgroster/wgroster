@@ -1691,3 +1691,43 @@ func TestAdminMachinesStatusButtonPerEndpoint(t *testing.T) {
 		t.Error("a multi-site machine should name each endpoint, not offer one unlabelled Status")
 	}
 }
+
+// A row shows what the machine is actually doing: current rates and a short
+// curve, built from the same reports the status page uses.
+func TestAdminMachinesShowsTraffic(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(9)}, "host_port": {"vpn:51820"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: %d", w.Code)
+	}
+	ep := endpointByName(t, srv, "paris")
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: %d (%s)", w.Code, w.Body)
+	}
+
+	// Three reports 10s apart; over the last interval, 1000 bytes down and 500
+	// up → 100 and 50 B/s, and two intervals make a curve.
+	now := time.Now()
+	for i, c := range []struct{ rx, tx int64 }{{0, 0}, {200, 100}, {1200, 600}} {
+		at := now.Add(time.Duration(i-2) * 10 * time.Second)
+		if err := srv.store.ReplaceStatus(ep.ID, []store.StatusPeer{
+			{PublicKey: key(1), LastHandshake: at, RX: c.rx, TX: c.tx},
+		}, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	body := do(t, h, "GET", "/admin/machines/list", cookies, nil).Body.String()
+	if !strings.Contains(body, "↓100 B/s ↑50 B/s") {
+		t.Error("the row does not show the current transfer rates")
+	}
+	if !strings.Contains(body, "<polyline") {
+		t.Error("the row has no sparkline")
+	}
+}

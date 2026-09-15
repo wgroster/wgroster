@@ -174,6 +174,76 @@ func (s *Store) EndpointThroughput(endpointID int64) (map[string][2]int64, error
 	return out, nil
 }
 
+// PeerTraffic is what a listing needs about one peer's transfer: the current
+// rates and a short shape to draw.
+type PeerTraffic struct {
+	RxRate int64   // bytes/s, from the last two reports
+	TxRate int64   // bytes/s
+	Series []int64 // combined rx+tx rate per interval, oldest first
+}
+
+// TrafficByKey returns the recent traffic of every peer of an endpoint, built
+// from its last n+1 reports.
+//
+// A listing needs this for the whole fleet at once, so it must not become a
+// query per machine: the samples of every peer come back in one scan of the
+// endpoint's recent window, and the per-peer arithmetic happens here.
+func (s *Store) TrafficByKey(endpointID int64, n int) (map[string]PeerTraffic, error) {
+	if n < 1 {
+		n = 1
+	}
+	rows, err := s.db.Query(`
+		SELECT public_key, report_ts, rx, tx FROM status_history
+		WHERE endpoint_id=? AND report_ts >= (
+			SELECT MIN(ts) FROM (
+				SELECT DISTINCT report_ts AS ts FROM status_history
+				WHERE endpoint_id=? ORDER BY ts DESC LIMIT ?))
+		ORDER BY public_key, report_ts`, endpointID, endpointID, n+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type sample struct{ ts, rx, tx int64 }
+	byKey := map[string][]sample{}
+	for rows.Next() {
+		var k string
+		var v sample
+		if err := rows.Scan(&k, &v.ts, &v.rx, &v.tx); err != nil {
+			return nil, err
+		}
+		byKey[k] = append(byKey[k], v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make(map[string]PeerTraffic, len(byKey))
+	for k, samples := range byKey {
+		var t PeerTraffic
+		for i := 1; i < len(samples); i++ {
+			prev, cur := samples[i-1], samples[i]
+			dt := cur.ts - prev.ts
+			if dt <= 0 {
+				continue
+			}
+			rx, tx := (cur.rx-prev.rx)/dt, (cur.tx-prev.tx)/dt
+			if rx < 0 {
+				rx = 0 // counter reset (the hub restarted)
+			}
+			if tx < 0 {
+				tx = 0
+			}
+			t.Series = append(t.Series, rx+tx)
+			t.RxRate, t.TxRate = rx, tx // the last interval wins: the current rate
+		}
+		if len(t.Series) > 0 {
+			out[k] = t
+		}
+	}
+	return out, nil
+}
+
 // HistorySample is one stored report sample for a peer.
 type HistorySample struct {
 	TS time.Time

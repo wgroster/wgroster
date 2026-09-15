@@ -88,6 +88,9 @@ type adminMachineView struct {
 	// went quiet and when.
 	HubStale bool
 	HubHint  string
+	// Traffic is the peer's recent transfer on the endpoint that reported it
+	// last: current rates plus a short shape for the row's sparkline.
+	Traffic store.PeerTraffic
 }
 
 // userGroup gathers one user's machines for the admin view.
@@ -119,6 +122,12 @@ func (g *userGroup) attention() int {
 		return 2
 	}
 }
+
+// rowSparkPoints is how many report intervals the per-machine curve covers. It
+// is deliberately short: the row answers "is this moving?", the drawer answers
+// "how much, since when", and the query behind it scans that window for every
+// peer of every endpoint on each 20s poll.
+const rowSparkPoints = 24
 
 // adminMachinesView is what both the machines page and its htmx fragment
 // render. The CSRF token travels with it because the fragment has no page
@@ -188,12 +197,27 @@ func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) 
 	// row would state, with the same confidence, something nobody has checked
 	// since the agent stopped.
 	reports := make(map[int64]endpointReport, len(endpoints))
+	traffic := map[string]store.PeerTraffic{}
 	for _, e := range endpoints {
 		at, ok, err := s.store.LastReport(e.ID)
 		if err != nil {
 			return view, err
 		}
 		reports[e.ID] = endpointReport{at: at, has: ok, fresh: ok && time.Since(at) < onlineThreshold, name: e.Name}
+
+		// Recent traffic for every peer of this endpoint in one go. A machine
+		// carried by several endpoints keeps the busiest of them: the row has a
+		// single curve, and what it should show is where the device is actually
+		// talking.
+		peerTraffic, err := s.store.TrafficByKey(e.ID, rowSparkPoints)
+		if err != nil {
+			return view, err
+		}
+		for k, t := range peerTraffic {
+			if cur, seen := traffic[k]; !seen || t.RxRate+t.TxRate > cur.RxRate+cur.TxRate {
+				traffic[k] = t
+			}
+		}
 	}
 
 	views := make([]adminMachineView, 0, len(machines))
@@ -226,6 +250,7 @@ func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) 
 		mv.Online = online(mv.LastHandshake)
 		mv.RemoteIP, mv.RemoteHint = s.remoteOrigin(peer.RemoteEndpoint)
 		mv.HubStale, mv.HubHint = hubSilence(ids, reports)
+		mv.Traffic = traffic[m.PublicKey]
 		views = append(views, mv)
 	}
 

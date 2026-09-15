@@ -43,6 +43,7 @@ var funcs = template.FuncMap{
 	"lower":       strings.ToLower,
 	"initial":     initial,
 	"sparkline":   sparkline,
+	"sparkMini":   sparklineMini,
 	"shortIPs":    shortIPs,
 	"shortKey":    shortKey,
 }
@@ -76,7 +77,13 @@ func machineIcon(name string, size int) template.HTML {
 // sparkline renders a tiny inline SVG line chart from numeric samples. The
 // output is built from numbers only (no user input), so it is safe as HTML and
 // fits the strict CSP (inline SVG markup, no script).
-func sparkline(vals []int64) template.HTML {
+func sparkline(vals []int64) template.HTML { return sparkSVG(vals, 120, 28) }
+
+// sparklineMini is the same curve at listing-row size, where it says "this is
+// moving / this is flat" rather than carrying readable values.
+func sparklineMini(vals []int64) template.HTML { return sparkSVG(vals, 72, 16) }
+
+func sparkSVG(vals []int64, width, height float64) template.HTML {
 	if len(vals) < 2 {
 		return ""
 	}
@@ -86,12 +93,15 @@ func sparkline(vals []int64) template.HTML {
 			max = v
 		}
 	}
-	w := 120.0
-	if len(vals) > 60 {
+	w := width
+	if float64(len(vals))*2 > w {
 		w = float64(len(vals) * 2)
 	}
-	const h = 28.0
-	const pad = 3.0 // keep the line off the top/bottom edges
+	h := height
+	pad := 3.0 // keep the line off the top/bottom edges
+	if h < 20 {
+		pad = 2.0
+	}
 	step := w / float64(len(vals)-1)
 	scaleY := func(v int64) float64 {
 		if max == 0 { // all-zero series → flat line in the middle

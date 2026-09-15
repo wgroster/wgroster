@@ -74,6 +74,12 @@
                timestamp stays one hover away. */}}
           {{if not $pending}} · <span class="cursor-help" title="{{exact $m.LastHandshake}}">last handshake {{ago $m.LastHandshake}}</span>{{end}}
           {{if $m.RemoteIP}} · from <span class="font-mono text-slate-600 dark:text-slate-400 cursor-help" title="{{$m.RemoteHint}}">{{$m.RemoteIP}}</span>{{end}}
+          {{if $m.Traffic.Series}}
+          <span class="inline-flex items-center gap-1.5 align-middle" title="↓ {{humanBytes $m.Traffic.RxRate}}/s · ↑ {{humanBytes $m.Traffic.TxRate}}/s over the last reports">
+            <span class="text-emerald-500 leading-none">{{sparkMini $m.Traffic.Series}}</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400 font-mono">↓{{humanBytes $m.Traffic.RxRate}}/s ↑{{humanBytes $m.Traffic.TxRate}}/s</span>
+          </span>
+          {{end}}
           · <button type="button" data-copy-text="{{$m.M.PublicKey}}" title="{{$m.M.PublicKey}} — click to copy"
                     class="font-mono text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">{{shortKey $m.M.PublicKey}}</button>
         </div>
