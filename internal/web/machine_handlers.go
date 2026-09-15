@@ -60,7 +60,7 @@ func (s *Server) buildDashboard(r *http.Request) (dashboardView, error) {
 	if err != nil {
 		return view, err
 	}
-	handshakes, err := s.store.LastHandshakeByKey(sess.UID)
+	peers, err := s.store.LatestPeerByKey(sess.UID)
 	if err != nil {
 		return view, err
 	}
@@ -70,7 +70,7 @@ func (s *Server) buildDashboard(r *http.Request) (dashboardView, error) {
 	}
 	view.Machines = make([]machineView, 0, len(machines))
 	for _, m := range machines {
-		mv := machineView{M: m, LastHandshake: handshakes[m.PublicKey]}
+		mv := machineView{M: m, LastHandshake: peers[m.PublicKey].LastHandshake}
 		if mv.LastHandshake.IsZero() {
 			mv.LastHandshake = m.LastSeen // no hub carries this peer any more
 		}

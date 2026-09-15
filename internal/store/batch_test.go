@@ -79,38 +79,43 @@ func TestBatchQueriesMatchPerRowQueries(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	older, newer := now.Add(-10*time.Minute), now.Add(-1*time.Minute)
 	if err := st.ReplaceStatus(par.ID, []StatusPeer{
-		{PublicKey: "k-laptop", LastHandshake: older},
+		{PublicKey: "k-laptop", LastHandshake: older, RemoteEndpoint: "198.51.100.4:51820"},
 		{PublicKey: "k-phone", LastHandshake: now},
 	}, now); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.ReplaceStatus(ams.ID, []StatusPeer{
-		{PublicKey: "k-laptop", LastHandshake: newer},
+		{PublicKey: "k-laptop", LastHandshake: newer, RemoteEndpoint: "203.0.113.9:51820"},
 		{PublicKey: "k-desktop", LastHandshake: now},
 	}, now); err != nil {
 		t.Fatal(err)
 	}
 
-	hs, err := st.LastHandshakeByKey("")
+	peers, err := st.LatestPeerByKey("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hs["k-laptop"].Equal(newer) {
-		t.Errorf("LastHandshakeByKey[k-laptop] = %s, want %s", hs["k-laptop"], newer)
+	if !peers["k-laptop"].LastHandshake.Equal(newer) {
+		t.Errorf("LatestPeerByKey[k-laptop] = %s, want %s", peers["k-laptop"].LastHandshake, newer)
 	}
-	if len(hs) != 3 {
-		t.Errorf("LastHandshakeByKey returned %d keys, want 3", len(hs))
+	// The whole row travels with the handshake, so a listing can show where the
+	// peer connected from without another query.
+	if got := peers["k-laptop"].RemoteEndpoint; got != "203.0.113.9:51820" {
+		t.Errorf("LatestPeerByKey[k-laptop].RemoteEndpoint = %q, want the newer report's", got)
 	}
-	if _, ok := hs["k-new"]; ok {
+	if len(peers) != 3 {
+		t.Errorf("LatestPeerByKey returned %d keys, want 3", len(peers))
+	}
+	if _, ok := peers["k-new"]; ok {
 		t.Error("a never-reported peer must be absent, not zero")
 	}
 
-	scopedHS, err := st.LastHandshakeByKey("bob")
+	scopedPeers, err := st.LatestPeerByKey("bob")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scopedHS) != 1 || !scopedHS["k-desktop"].Equal(now) {
-		t.Errorf("LastHandshakeByKey(bob) = %v", scopedHS)
+	if len(scopedPeers) != 1 || !scopedPeers["k-desktop"].LastHandshake.Equal(now) {
+		t.Errorf("LatestPeerByKey(bob) = %v", scopedPeers)
 	}
 }
 

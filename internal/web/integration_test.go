@@ -1514,3 +1514,52 @@ func TestOverlappingEndpointsCannotBeCombined(t *testing.T) {
 		t.Errorf("a harmless endpoint edit was refused: %q", w.Header().Get("Location"))
 	}
 }
+
+// The machines list shows where each peer connects from: it is how an
+// administrator recognises a device that moved or a tunnel coming up from an
+// unexpected network. A peer the hub carries but that never handshaked reads
+// "never", not the Unix epoch.
+func TestAdminMachinesShowsRemoteOrigin(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: %d (%s)", w.Code, w.Body)
+	}
+	ep := endpointByName(t, srv, "paris")
+
+	seen, never := key(1), key(3)
+	for i, k := range []string{seen, never} {
+		w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+			"csrf": {csrf}, "owner_uid": {"alice"}, "name": {fmt.Sprintf("m%d", i)}, "public_key": {k},
+			"address": {fmt.Sprintf("10.0.0.%d", i+1)}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+		})
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("create machine: %d (%s)", w.Code, w.Body)
+		}
+	}
+	if err := srv.store.ReplaceStatus(ep.ID, []store.StatusPeer{
+		{PublicKey: seen, LastHandshake: time.Now().Add(-time.Minute), RemoteEndpoint: "203.0.113.9:41234"},
+		{PublicKey: never}, // carried by the hub, never handshaked
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	w = do(t, h, "GET", "/admin/machines", cookies, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("machines page: %d", w.Code)
+	}
+	body := w.Body.String()
+	// Visible text: the address alone. The ephemeral source port changes on
+	// every NAT rebind, so it belongs in the tooltip, not on the row.
+	if !strings.Contains(body, ">203.0.113.9</span>") {
+		t.Error("the remote address is not shown on the row")
+	}
+	if !strings.Contains(body, `title="203.0.113.9:41234"`) {
+		t.Error("the tooltip should spell out the full host:port")
+	}
+	if !strings.Contains(body, "last handshake never") {
+		t.Error("a peer that never handshaked should read \"never\"")
+	}
+}

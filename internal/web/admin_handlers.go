@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/netip"
 	"sort"
@@ -70,6 +71,11 @@ type adminMachineView struct {
 	Online            bool
 	LastHandshake     time.Time
 	ApprovedAt        time.Time
+	// RemoteIP is the address the peer last connected from, as the hub saw it,
+	// without the port. RemoteHint is what the row's tooltip spells out: the full
+	// host:port, plus location and network when GeoIP is configured.
+	RemoteIP   string
+	RemoteHint string
 }
 
 // userGroup gathers one user's machines for the admin view.
@@ -109,7 +115,7 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, err)
 		return
 	}
-	handshakes, err := s.store.LastHandshakeByKey("")
+	peers, err := s.store.LatestPeerByKey("")
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -146,14 +152,17 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		if m.ApprovedAt != nil {
 			mv.ApprovedAt = *m.ApprovedAt
 		}
-		mv.LastHandshake = handshakes[m.PublicKey]
+		peer := peers[m.PublicKey]
+		mv.LastHandshake = peer.LastHandshake
 		if mv.LastHandshake.IsZero() {
-			// No hub currently carries this peer (removed, endpoint deleted): fall
-			// back to the last handshake the portal ever recorded for it, so the
-			// row says "last seen 3 months ago" instead of "never".
+			// No hub currently carries this peer (removed, endpoint deleted), or it
+			// never handshaked here: fall back to the last handshake the portal ever
+			// recorded for it, so the row says "last seen 3 months ago" rather than
+			// "never" for a device that clearly did connect once.
 			mv.LastHandshake = m.LastSeen
 		}
 		mv.Online = online(mv.LastHandshake)
+		mv.RemoteIP, mv.RemoteHint = s.remoteOrigin(peer.RemoteEndpoint)
 		views = append(views, mv)
 	}
 
@@ -230,6 +239,41 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 		SuggestedIP  string
 		TotalPending int
 	}{groups, endpoints, suggested, totalPending})
+}
+
+// remoteOrigin splits the "host:port" the hub reported into the address to show
+// on a row and a fuller tooltip. Where a peer connects from is how an
+// administrator recognises a device that moved, a tunnel that came up from an
+// unexpected network, or two machines sharing one line; the port changes on
+// every NAT rebind and is noise on the row itself, so it moves to the tooltip
+// along with the offline GeoIP answer when one is configured.
+func (s *Server) remoteOrigin(remote string) (ip, hint string) {
+	if remote == "" {
+		return "", ""
+	}
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil || host == "" {
+		return "", ""
+	}
+	hint = remote
+	if s.geo.Enabled() {
+		if g := s.geo.Lookup(host); !g.Empty() {
+			where := g.Country
+			if g.City != "" {
+				where = g.City + ", " + g.Country
+			}
+			if where != "" {
+				hint += " · " + where
+			}
+			if g.ASN != "" {
+				hint += " · " + g.ASN
+				if g.Org != "" {
+					hint += " " + g.Org
+				}
+			}
+		}
+	}
+	return host, hint
 }
 
 // handleAdminCreateMachine lets an administrator register a machine and activate
