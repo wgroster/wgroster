@@ -53,6 +53,11 @@
                   title="Taken out of service — excluded from every concentrator's expected peer list">Disabled</span>
           {{else if $m.Online}}
             <span class="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">● Online</span>
+          {{else if $m.HubStale}}
+            {{/* Nothing has been reported by the hub carrying this machine, so
+                 "offline" would be a claim nobody checked. */}}
+            <span class="text-xs rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 cursor-help"
+                  title="{{$m.HubHint}}">? Unknown</span>
           {{else}}
             <span class="text-xs rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5">○ Offline</span>
           {{end}}

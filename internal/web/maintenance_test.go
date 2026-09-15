@@ -543,3 +543,37 @@ func TestSweepDormantRefusesWithoutFreshReport(t *testing.T) {
 		}
 	}
 }
+
+func TestHubSilence(t *testing.T) {
+	now := time.Now()
+	fresh := endpointReport{at: now, has: true, fresh: true, name: "paris"}
+	quiet := endpointReport{at: now.Add(-4 * time.Hour), has: true, name: "lyon"}
+	never := endpointReport{name: "oslo"}
+	reports := map[int64]endpointReport{1: fresh, 2: quiet, 3: never}
+
+	tests := []struct {
+		name  string
+		ids   []int64
+		stale bool
+		hint  string
+	}{
+		{name: "no endpoint at all is not judged", ids: nil},
+		{name: "a reporting hub", ids: []int64{1}},
+		{name: "one reporting hub is enough", ids: []int64{1, 2}},
+		{name: "every hub quiet", ids: []int64{2}, stale: true, hint: "lyon last reported 4h ago"},
+		{name: "a hub that never reported", ids: []int64{3}, stale: true, hint: "oslo has never reported"},
+		{name: "several quiet hubs are all named", ids: []int64{2, 3}, stale: true, hint: "lyon last reported 4h ago, oslo has never reported"},
+		{name: "an endpoint that vanished", ids: []int64{99}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stale, hint := hubSilence(tc.ids, reports)
+			if stale != tc.stale {
+				t.Fatalf("stale = %v, want %v (hint %q)", stale, tc.stale, hint)
+			}
+			if tc.hint != "" && !strings.HasPrefix(hint, tc.hint) {
+				t.Errorf("hint = %q, want it to start with %q", hint, tc.hint)
+			}
+		})
+	}
+}

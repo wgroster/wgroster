@@ -76,6 +76,12 @@ type adminMachineView struct {
 	// host:port, plus location and network when GeoIP is configured.
 	RemoteIP   string
 	RemoteHint string
+	// HubStale reports that no endpoint this machine is linked to has sent a
+	// recent status report, so its state here is the last one the portal was
+	// told about rather than what is happening now. HubHint says which endpoint
+	// went quiet and when.
+	HubStale bool
+	HubHint  string
 }
 
 // userGroup gathers one user's machines for the admin view.
@@ -171,6 +177,19 @@ func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) 
 		return view, err
 	}
 
+	// Whether each endpoint is still reporting. A machine's "offline" only means
+	// something when the hub carrying it is talking to the portal; otherwise the
+	// row would state, with the same confidence, something nobody has checked
+	// since the agent stopped.
+	reports := make(map[int64]endpointReport, len(endpoints))
+	for _, e := range endpoints {
+		at, ok, err := s.store.LastReport(e.ID)
+		if err != nil {
+			return view, err
+		}
+		reports[e.ID] = endpointReport{at: at, has: ok, fresh: ok && time.Since(at) < onlineThreshold, name: e.Name}
+	}
+
 	views := make([]adminMachineView, 0, len(machines))
 	for _, m := range machines {
 		ids := links[m.ID]
@@ -203,6 +222,7 @@ func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) 
 		}
 		mv.Online = online(mv.LastHandshake)
 		mv.RemoteIP, mv.RemoteHint = s.remoteOrigin(peer.RemoteEndpoint)
+		mv.HubStale, mv.HubHint = hubSilence(ids, reports)
 		views = append(views, mv)
 	}
 
@@ -283,6 +303,47 @@ func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) 
 	view.Groups, view.AllEndpoints = groups, endpoints
 	view.SuggestedIP, view.TotalPending = suggested, totalPending
 	return view, nil
+}
+
+// endpointReport is what the machines list knows about one endpoint's last
+// status upload.
+type endpointReport struct {
+	at    time.Time
+	has   bool
+	fresh bool
+	name  string
+}
+
+// hubSilence reports whether none of the endpoints a machine is linked to has
+// sent a recent status report, and describes the silence for the tooltip.
+//
+// A machine linked to several endpoints is only unknown when every one of them
+// has gone quiet: a single reporting hub is enough to know the machine is not
+// connected there. A machine with no endpoint at all is not judged.
+func hubSilence(ids []int64, reports map[int64]endpointReport) (bool, string) {
+	if len(ids) == 0 {
+		return false, ""
+	}
+	var quiet []string
+	for _, id := range ids {
+		rep, ok := reports[id]
+		if !ok {
+			continue
+		}
+		if rep.fresh {
+			return false, ""
+		}
+		if rep.has {
+			quiet = append(quiet, fmt.Sprintf("%s last reported %s", rep.name, ago(rep.at)))
+		} else {
+			quiet = append(quiet, rep.name+" has never reported")
+		}
+	}
+	if len(quiet) == 0 {
+		return false, ""
+	}
+	return true, strings.Join(quiet, ", ") +
+		" — this is the last state the portal was told about, not what is happening now"
 }
 
 // remoteOrigin splits the "host:port" the hub reported into the address to show
