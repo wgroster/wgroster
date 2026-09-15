@@ -68,7 +68,7 @@
         </div>
         <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
           {{if $m.M.Address}}<span class="font-mono text-slate-700 dark:text-slate-300">{{$m.M.Address}}</span>{{else}}<em>no address</em>{{end}}
-          {{if $m.EndpointNames}} · {{range $i, $n := $m.EndpointNames}}{{if $i}}, {{end}}{{$n}}{{end}}{{end}}
+          {{if $m.Endpoints}} · {{range $i, $e := $m.Endpoints}}{{if $i}}, {{end}}{{$e.Name}}{{end}}{{end}}
           {{/* ago, not since: on a fleet list a months-old handshake spells out
                "109 days, 10 hours, 19 minutes, 47 seconds ago". The exact
                timestamp stays one hover away. */}}
@@ -82,13 +82,18 @@
         {{end}}
       </div>
       <div class="flex items-center gap-2">
-        {{if and (not $pending) (not $disabled) $m.PrimaryEndpointID}}
-        <button type="button" title="Live status" aria-label="Live status"
-                hx-get="/admin/peer?endpoint={{$m.PrimaryEndpointID}}&key={{urlquery $m.M.PublicKey}}"
+        {{/* One button per linked endpoint: the drawer shows a peer *on an
+             endpoint*, so a multi-site machine has one live status per site and
+             a single "Status" button would silently pick the first. */}}
+        {{if and (not $pending) (not $disabled)}}
+        {{range $m.Endpoints}}
+        <button type="button" title="Live status on {{.Name}}" aria-label="Live status on {{.Name}}"
+                hx-get="/admin/peer?endpoint={{.ID}}&key={{urlquery $m.M.PublicKey}}"
                 hx-target="#peer-drawer-body" data-dialog="peer-drawer"
-                class="text-sm rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">Status</button>
+                class="text-sm rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">{{if eq (len $m.Endpoints) 1}}Status{{else}}{{.Name}}{{end}}</button>
         {{end}}
-        {{if and (not $pending) (not $disabled) $m.EndpointNames}}
+        {{end}}
+        {{if and (not $pending) (not $disabled) $m.Endpoints}}
         <a href="/machines/{{$m.M.ID}}/config" title="View and download this machine's configuration"
            class="text-sm rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">Config</a>
         {{end}}

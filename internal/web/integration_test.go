@@ -1653,3 +1653,41 @@ func TestAdminMachinesOrderingAndSearchFields(t *testing.T) {
 		t.Error("rows carry no dormancy marker for the filter to read")
 	}
 }
+
+// A peer's live status is per endpoint, so a machine on two sites gets one
+// button per site instead of a single one silently pointing at the first.
+func TestAdminMachinesStatusButtonPerEndpoint(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	for i, ep := range []struct{ name, allowed string }{
+		{"paris", "192.168.1.0/24"},
+		{"lyon", "192.168.2.0/24"},
+	} {
+		w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+			"csrf": {csrf}, "name": {ep.name}, "public_key": {key(byte(20 + i))},
+			"host_port": {"vpn:51820"}, "allowed_ips": {ep.allowed},
+		})
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("create %s: %d (%s)", ep.name, w.Code, w.Body)
+		}
+	}
+	paris, lyon := endpointByName(t, srv, "paris"), endpointByName(t, srv, "lyon")
+
+	w := do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(paris.ID), fmt.Sprint(lyon.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: %d (%s)", w.Code, w.Body)
+	}
+
+	body := do(t, h, "GET", "/admin/machines/list", cookies, nil).Body.String()
+	for _, ep := range []*store.Endpoint{paris, lyon} {
+		want := fmt.Sprintf("/admin/peer?endpoint=%d&key=", ep.ID)
+		if !strings.Contains(body, want) {
+			t.Errorf("no live-status link for %s (%q)", ep.Name, want)
+		}
+	}
+	if strings.Contains(body, ">Status</button>") {
+		t.Error("a multi-site machine should name each endpoint, not offer one unlabelled Status")
+	}
+}

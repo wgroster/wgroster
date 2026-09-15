@@ -39,7 +39,7 @@ func TestTemplatesExecute(t *testing.T) {
 				Name:     "Alice Example",
 				Total:    1,
 				OnlineN:  1,
-				Machines: []adminMachineView{{M: m, EndpointNames: []string{"paris"}, SelectedIDs: map[int64]bool{1: true}, Online: true}},
+				Machines: []adminMachineView{{M: m, Endpoints: []machineEndpoint{{ID: 1, Name: "paris"}, {ID: 2, Name: "lyon"}}, SelectedIDs: map[int64]bool{1: true}, Online: true}},
 			}},
 			AllEndpoints: []*store.Endpoint{ep},
 			SuggestedIP:  "10.0.0.6",

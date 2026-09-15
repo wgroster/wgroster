@@ -63,14 +63,20 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 
 // ---- Machines administration ------------------------------------------------
 
+// machineEndpoint is one endpoint a machine is linked to, named and addressable
+// — the row links to the live status of each of them, not just the first.
+type machineEndpoint struct {
+	ID   int64
+	Name string
+}
+
 type adminMachineView struct {
-	M                 *store.Machine
-	EndpointNames     []string
-	SelectedIDs       map[int64]bool
-	PrimaryEndpointID int64 // first linked endpoint, for the live-status drawer link
-	Online            bool
-	LastHandshake     time.Time
-	ApprovedAt        time.Time
+	M             *store.Machine
+	Endpoints     []machineEndpoint
+	SelectedIDs   map[int64]bool
+	Online        bool
+	LastHandshake time.Time
+	ApprovedAt    time.Time
 	// RemoteIP is the address the peer last connected from, as the hub saw it,
 	// without the port. RemoteHint is what the row's tooltip spells out: the full
 	// host:port, plus location and network when GeoIP is configured.
@@ -194,20 +200,17 @@ func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) 
 	for _, m := range machines {
 		ids := links[m.ID]
 		selected := make(map[int64]bool, len(ids))
-		var names []string
-		var primaryEID int64
 		for _, id := range ids {
 			selected[id] = true
 		}
+		// endpoints is ordered by name, so filtering it keeps that order.
+		var linked []machineEndpoint
 		for _, e := range endpoints {
 			if selected[e.ID] {
-				names = append(names, e.Name)
-				if primaryEID == 0 {
-					primaryEID = e.ID
-				}
+				linked = append(linked, machineEndpoint{ID: e.ID, Name: e.Name})
 			}
 		}
-		mv := adminMachineView{M: m, EndpointNames: names, SelectedIDs: selected, PrimaryEndpointID: primaryEID}
+		mv := adminMachineView{M: m, Endpoints: linked, SelectedIDs: selected}
 		if m.ApprovedAt != nil {
 			mv.ApprovedAt = *m.ApprovedAt
 		}
