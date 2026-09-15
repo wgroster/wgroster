@@ -1563,3 +1563,44 @@ func TestAdminMachinesShowsRemoteOrigin(t *testing.T) {
 		t.Error("a peer that never handshaked should read \"never\"")
 	}
 }
+
+// The machines page polls its list, not itself: the fragment must render the
+// same rows without the page envelope around them.
+func TestAdminMachinesListFragment(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)}, "host_port": {"vpn:51820"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: %d", w.Code)
+	}
+	ep := endpointByName(t, srv, "paris")
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"alice"}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {fmt.Sprint(ep.ID)},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: %d (%s)", w.Code, w.Body)
+	}
+
+	w = do(t, h, "GET", "/admin/machines/list", cookies, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list fragment: %d", w.Code)
+	}
+	body := w.Body.String()
+	for _, want := range []string{`id="m-list"`, "laptop", "10.0.0.5"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("fragment missing %q", want)
+		}
+	}
+	// A fragment, not a page: no layout, and no second copy of the create form.
+	for _, unwanted := range []string{"<!doctype html>", `action="/admin/machines"`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("fragment should not contain %q", unwanted)
+		}
+	}
+	// The CSRF token must survive into the fragment, or its forms 403.
+	if !strings.Contains(body, csrf) {
+		t.Error("fragment carries no CSRF token")
+	}
+}

@@ -23,9 +23,9 @@ var fullPages = []string{
 }
 
 // partials are rendered standalone: the htmx fragment endpoints (status_table,
-// peer_drawer, dashboard_list) plus icon_picker, a snippet every page embeds
-// rather than a fragment of its own.
-var partials = []string{"status_table", "peer_drawer", "dashboard_list", "icon_picker"}
+// peer_drawer, dashboard_list, admin_machines_list) plus icon_picker, a snippet
+// every page embeds rather than a fragment of its own.
+var partials = []string{"status_table", "peer_drawer", "dashboard_list", "admin_machines_list", "icon_picker"}
 
 var (
 	pageTmpls    = map[string]*template.Template{}

@@ -131,6 +131,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Admin area.
 	mux.HandleFunc("GET /admin/machines", s.admin(s.handleAdminMachines))
+	mux.HandleFunc("GET /admin/machines/list", s.admin(s.handleAdminMachinesList))
 	mux.HandleFunc("POST /admin/machines", s.admin(s.handleAdminCreateMachine))
 	mux.HandleFunc("POST /admin/machines/{id}", s.admin(s.handleUpdateMachine))
 	mux.HandleFunc("POST /admin/machines/{id}/disable", s.admin(s.handleDisableMachine))

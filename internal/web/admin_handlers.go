@@ -95,16 +95,47 @@ type userGroup struct {
 	AbsentSince time.Time
 }
 
+// adminMachinesView is what both the machines page and its htmx fragment
+// render. The CSRF token travels with it because the fragment has no page
+// envelope.
+type adminMachinesView struct {
+	Groups       []*userGroup
+	AllEndpoints []*store.Endpoint
+	SuggestedIP  string
+	TotalPending int
+	CSRF         string
+}
+
 func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
-	machines, err := s.store.ListMachines()
+	view, err := s.buildAdminMachines(r)
 	if err != nil {
 		s.serverError(w, err)
 		return
 	}
-	endpoints, err := s.store.ListEndpoints()
+	s.render(w, r, "admin_machines", "Machines", "machines", view)
+}
+
+// handleAdminMachinesList serves just the machine list, which the page polls
+// every 20s. Rendering the whole page for it would rebuild the create form and
+// one edit dialog per machine only for htmx to keep a single div.
+func (s *Server) handleAdminMachinesList(w http.ResponseWriter, r *http.Request) {
+	view, err := s.buildAdminMachines(r)
 	if err != nil {
 		s.serverError(w, err)
 		return
+	}
+	s.renderPartial(w, "admin_machines_list", view)
+}
+
+func (s *Server) buildAdminMachines(r *http.Request) (adminMachinesView, error) {
+	view := adminMachinesView{CSRF: sessionFrom(r).CSRF}
+	machines, err := s.store.ListMachines()
+	if err != nil {
+		return view, err
+	}
+	endpoints, err := s.store.ListEndpoints()
+	if err != nil {
+		return view, err
 	}
 
 	// Endpoint links, live handshakes and directory profiles are fetched in one
@@ -112,23 +143,19 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 	// serialized SQLite connection, and this page lists the whole fleet.
 	links, err := s.store.EndpointLinks("")
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
 	peers, err := s.store.LatestPeerByKey("")
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
 	profiles, err := s.store.AllUserProfileMetas()
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
 	ownerChecks, err := s.store.OwnerChecks()
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
 
 	views := make([]adminMachineView, 0, len(machines))
@@ -168,8 +195,7 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 
 	used, err := s.store.UsedAddresses()
 	if err != nil {
-		s.serverError(w, err)
-		return
+		return view, err
 	}
 	suggested, _ := s.pool.NextFree(used)
 
@@ -233,12 +259,9 @@ func (s *Server) handleAdminMachines(w http.ResponseWriter, r *http.Request) {
 	// LDAP service account); photos and names appear on a subsequent load.
 	s.refreshProfilesAsync(order, profiles)
 
-	s.render(w, r, "admin_machines", "Machines", "machines", struct {
-		Groups       []*userGroup
-		AllEndpoints []*store.Endpoint
-		SuggestedIP  string
-		TotalPending int
-	}{groups, endpoints, suggested, totalPending})
+	view.Groups, view.AllEndpoints = groups, endpoints
+	view.SuggestedIP, view.TotalPending = suggested, totalPending
+	return view, nil
 }
 
 // remoteOrigin splits the "host:port" the hub reported into the address to show

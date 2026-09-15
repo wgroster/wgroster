@@ -33,22 +33,18 @@ func TestTemplatesExecute(t *testing.T) {
 			Config  string
 			Foreign bool
 		}{m, "config text", false},
-		"admin_machines": struct {
-			Groups       []*userGroup
-			AllEndpoints []*store.Endpoint
-			SuggestedIP  string
-			TotalPending int
-		}{
-			[]*userGroup{{
+		"admin_machines": adminMachinesView{
+			Groups: []*userGroup{{
 				UID:      "alice",
 				Name:     "Alice Example",
 				Total:    1,
 				OnlineN:  1,
 				Machines: []adminMachineView{{M: m, EndpointNames: []string{"paris"}, SelectedIDs: map[int64]bool{1: true}, Online: true}},
 			}},
-			[]*store.Endpoint{ep},
-			"10.0.0.6",
-			1,
+			AllEndpoints: []*store.Endpoint{ep},
+			SuggestedIP:  "10.0.0.6",
+			TotalPending: 1,
+			CSRF:         "tok",
 		},
 		"admin_endpoints": struct {
 			Endpoints []endpointAdminView
@@ -111,6 +107,13 @@ func TestTemplatesExecute(t *testing.T) {
 	}
 	if err := partialTmpls["status_table"].ExecuteTemplate(io.Discard, "status_table", summarize(statuses)); err != nil {
 		t.Errorf("execute status_table: %v", err)
+	}
+	adminList := data["admin_machines"]
+	if err := partialTmpls["admin_machines_list"].ExecuteTemplate(io.Discard, "admin_machines_list", adminList); err != nil {
+		t.Errorf("execute admin_machines_list: %v", err)
+	}
+	if err := partialTmpls["admin_machines_list"].ExecuteTemplate(io.Discard, "admin_machines_list", adminMachinesView{}); err != nil {
+		t.Errorf("execute admin_machines_list with no machine: %v", err)
 	}
 
 	// The icon picker is embedded by several forms; render it for every known
