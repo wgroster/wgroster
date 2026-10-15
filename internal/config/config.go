@@ -12,6 +12,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// defaultMaxPendingPerUser applies when max_pending_per_user is not set.
+const defaultMaxPendingPerUser = 5
+
 // minSessionKeyLen is the minimum accepted length (in bytes) for an
 // operator-supplied session_key. Sessions are HMAC-signed with it.
 const minSessionKeyLen = 32
@@ -70,7 +73,9 @@ type Config struct {
 	// SelfEnrollEndpoint is the endpoint name used to build self-enrolled
 	// configs (required when self_enroll is on).
 	SelfEnrollEndpoint string `yaml:"self_enroll_endpoint"`
-	// MaxPendingPerUser caps pending machines per user (0 = unlimited).
+	// MaxPendingPerUser caps pending machines per user. Default 5; an explicit
+	// 0 lifts the cap. Without one, any directory account can fill the review
+	// queue, and with self_enroll on, drain the address pool.
 	MaxPendingPerUser int `yaml:"max_pending_per_user"`
 	// PendingExpiryDays auto-deletes pending machines older than N days,
 	// freeing their reserved IP (0 = never).
@@ -186,6 +191,7 @@ func Load(path string) (*Config, error) {
 			MemberAttr: "memberUid",
 			PhotoAttr:  "jpegPhoto",
 		},
+		MaxPendingPerUser: defaultMaxPendingPerUser,
 	}
 
 	data, err := os.ReadFile(path)
@@ -265,6 +271,9 @@ func Load(path string) (*Config, error) {
 
 	if c.SelfEnroll && c.SelfEnrollEndpoint == "" {
 		return nil, fmt.Errorf("self_enroll requires self_enroll_endpoint (the endpoint name to enroll into)")
+	}
+	if c.MaxPendingPerUser < 0 {
+		return nil, fmt.Errorf("max_pending_per_user must not be negative (0 lifts the cap)")
 	}
 	if c.PendingExpiryDays < 0 {
 		return nil, fmt.Errorf("pending_expiry_days must not be negative")

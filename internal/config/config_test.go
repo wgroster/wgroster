@@ -48,6 +48,26 @@ func TestLoadDefaults(t *testing.T) {
 	if c.SessionTTL != 12*time.Hour || c.SessionMaxLifetime != 7*24*time.Hour {
 		t.Errorf("session defaults = %s / %s", c.SessionTTL, c.SessionMaxLifetime)
 	}
+	if c.MaxPendingPerUser != 5 {
+		t.Errorf("max_pending_per_user default = %d, want 5", c.MaxPendingPerUser)
+	}
+}
+
+// The pending cap is on by default, but an operator must still be able to set
+// another value or lift it with an explicit 0 (not mistaken for "unset").
+func TestLoadMaxPendingPerUser(t *testing.T) {
+	for yaml, want := range map[string]int{
+		"max_pending_per_user: 0\n":  0,
+		"max_pending_per_user: 12\n": 12,
+	} {
+		c, err := load(t, minimal+yaml)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", yaml, err)
+		}
+		if c.MaxPendingPerUser != want {
+			t.Errorf("%q: got %d, want %d", yaml, c.MaxPendingPerUser, want)
+		}
+	}
 }
 
 func TestLoadRejects(t *testing.T) {
@@ -102,6 +122,11 @@ func TestLoadRejects(t *testing.T) {
 			name: "negative audit retention",
 			yaml: minimal + "audit_retention_days: -1\n",
 			want: "audit_retention_days must not be negative",
+		},
+		{
+			name: "negative pending cap",
+			yaml: minimal + "max_pending_per_user: -1\n",
+			want: "max_pending_per_user must not be negative",
 		},
 		{
 			name: "negative pending expiry",

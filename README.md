@@ -317,7 +317,9 @@ Disabled is a status of its own, deliberately not "pending": an offboarded
 device is not awaiting review, so it stays out of the queue, out of
 `max_pending_per_user` and out of `pending_expiry_days` — its address is never
 silently freed while the account is gone. Machines that *are* sent back to
-pending (a user changing their public key) are subject to `pending_expiry_days`
+pending (a user changing the public key of an active or disabled machine — a
+disabled one cannot be re-enabled with a key nobody reviewed) are subject to
+`pending_expiry_days`
 like any other, counted from the moment they entered the queue rather than from
 their creation, so you get the full review window before the address is freed.
 

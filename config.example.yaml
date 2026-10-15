@@ -65,9 +65,9 @@ alert_webhook_url: ""
 self_enroll: false
 # Endpoint (by name) self-enrolled devices connect to (required if self_enroll).
 self_enroll_endpoint: ""
-# Cap pending machines per user (0 = unlimited) and auto-expire stale pending
-# machines after N days, freeing their reserved IP (0 = never).
-max_pending_per_user: 0
+# Cap pending machines per user (default 5; 0 = unlimited) and auto-expire
+# stale pending machines after N days, freeing their reserved IP (0 = never).
+max_pending_per_user: 5
 pending_expiry_days: 0
 
 # Prune admin audit entries older than N days (0 = keep forever). The audit log
