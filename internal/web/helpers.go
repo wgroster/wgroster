@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 func parseInt64(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
@@ -58,20 +59,6 @@ func validPublicKey(k string) bool {
 	return true
 }
 
-// sanitizeComment makes a user-supplied label safe to emit on a single comment
-// line of a generated WireGuard config. Input is validated by validName at every
-// write path, but this is defense in depth at the rendering sink: any control
-// character (notably newlines) is replaced with a space so a stored value can
-// never break out of the "# name (owner)" line into an injected directive.
-func sanitizeComment(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || unicode.IsControl(r) {
-			return ' '
-		}
-		return r
-	}, s)
-}
-
 // hasControlChar reports whether s contains any control character (notably a
 // newline). Endpoint fields are written line-by-line into generated WireGuard
 // configs, so a newline would let extra directives be injected.
@@ -88,14 +75,18 @@ func online(handshake time.Time) bool {
 	return !handshake.IsZero() && time.Since(handshake) < onlineThreshold
 }
 
+// maxNameLen caps a machine name or owner, in characters. Labels are shown on
+// every list row and in generated configs; nothing legitimate comes close.
+const maxNameLen = 128
+
 // validName reports whether a user-supplied label (machine name, owner) is safe
-// to store and later render. It must be non-empty after trimming and must not
-// contain control characters. Rejecting newlines in particular prevents
+// to store and later render. It must be non-empty after trimming, at most
+// maxNameLen characters, and must not contain control characters. Rejecting newlines in particular prevents
 // WireGuard config injection: names are emitted into the "# name" comment of a
 // [Peer] block by handleExpectedPeers (format=wg), so an embedded newline could
 // inject an attacker-controlled PublicKey/AllowedIPs line.
 func validName(s string) bool {
-	if strings.TrimSpace(s) == "" {
+	if strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > maxNameLen {
 		return false
 	}
 	for _, r := range s {

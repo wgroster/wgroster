@@ -1894,3 +1894,91 @@ func TestLoginRateLimitFoldsUsername(t *testing.T) {
 		t.Errorf("one more spelling of the same login was not throttled: %q", loc)
 	}
 }
+
+// TestMachineNameLength: names are capped, at every write path that takes one.
+func TestMachineNameLength(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	long := strings.Repeat("é", maxNameLen+1) // counted in characters, not bytes
+	w := do(t, h, "POST", "/machines", cookies, url.Values{
+		"csrf": {csrf}, "name": {long}, "public_key": {key(1)},
+	})
+	if !strings.Contains(w.Header().Get("Location"), "err=") {
+		t.Errorf("a %d-character name was accepted", maxNameLen+1)
+	}
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {long}, "name": {"laptop"}, "public_key": {key(1)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {"1"},
+	})
+	if !strings.Contains(w.Header().Get("Location"), "err=") {
+		t.Errorf("a %d-character owner was accepted", maxNameLen+1)
+	}
+	if ms, _ := srv.store.ListMachines(); len(ms) != 0 {
+		t.Fatalf("over-long labels stored: %d machines", len(ms))
+	}
+
+	w = do(t, h, "POST", "/machines", cookies, url.Values{
+		"csrf": {csrf}, "name": {long[:len(long)-len("é")]}, "public_key": {key(1)},
+	})
+	if strings.Contains(w.Header().Get("Location"), "err=") {
+		t.Errorf("a %d-character name was refused: %q", maxNameLen, w.Header().Get("Location"))
+	}
+}
+
+// TestAddMachinePendingCap: adding a machine by hand is held to the same
+// per-user pending cap as self-enrollment.
+func TestAddMachinePendingCap(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	srv.cfg.MaxPendingPerUser = 1
+
+	add := func(k string) string {
+		t.Helper()
+		return do(t, h, "POST", "/machines", cookies, url.Values{
+			"csrf": {csrf}, "name": {"laptop"}, "public_key": {k},
+		}).Header().Get("Location")
+	}
+	if loc := add(key(1)); strings.Contains(loc, "err=") {
+		t.Fatalf("first machine refused: %q", loc)
+	}
+	if loc := add(key(2)); !strings.Contains(loc, "err=") {
+		t.Errorf("second pending machine accepted over a cap of 1: %q", loc)
+	}
+	if n, _ := srv.store.CountPendingByOwner("admin"); n != 1 {
+		t.Errorf("%d pending machines, want 1", n)
+	}
+}
+
+// TestUserDeleteIsAudited: a machine removed by its owner leaves the same
+// audit trail as one removed by an administrator.
+func TestUserDeleteIsAudited(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+	do(t, h, "POST", "/machines", cookies, url.Values{
+		"csrf": {csrf}, "name": {"laptop"}, "public_key": {key(1)},
+	})
+	ms, _ := srv.store.ListMachines()
+	if len(ms) != 1 {
+		t.Fatalf("expected 1 machine, got %d", len(ms))
+	}
+	w := do(t, h, "POST", fmt.Sprintf("/machines/%d/delete", ms[0].ID), cookies, url.Values{"csrf": {csrf}})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("delete: got %d", w.Code)
+	}
+	entries, _ := srv.store.ListAudit(10)
+	if len(entries) == 0 || entries[0].Action != "machine.delete" || entries[0].Target != "admin/laptop" {
+		t.Errorf("audit = %+v, want machine.delete admin/laptop", entries)
+	}
+}
+
+// TestLoginBodyCapped: the login form is read through the same body cap as the
+// authenticated routes.
+func TestLoginBodyCapped(t *testing.T) {
+	_, h, _, _ := testServer(t)
+	body := "uid=alice&password=x&pad=" + strings.Repeat("a", maxFormBytes)
+	r := httptest.NewRequest("POST", "/login", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if loc := w.Header().Get("Location"); !strings.Contains(loc, "Missing+credentials") {
+		t.Errorf("an oversized login body was parsed: %d %q", w.Code, loc)
+	}
+}

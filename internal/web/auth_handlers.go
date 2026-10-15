@@ -27,6 +27,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cross-origin request rejected", http.StatusForbidden)
 		return
 	}
+	// The authenticated routes cap their bodies in the user middleware; login
+	// sits outside it.
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
 	if !s.loginLimiter.allow(s.clientIP(r)) {
 		http.Redirect(w, r, "/login?err=Too+many+attempts,+try+again+later", http.StatusSeeOther)
 		return

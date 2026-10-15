@@ -96,12 +96,26 @@ func (s *Server) handleAddMachine(w http.ResponseWriter, r *http.Request) {
 	pubKey := strings.TrimSpace(r.FormValue("public_key"))
 
 	if !validName(name) {
-		redirectMsg(w, r, "/", "err", "Machine name is required and must not contain control characters")
+		redirectMsg(w, r, "/", "err", "Machine name is required: at most 128 characters, no control characters")
 		return
 	}
 	if !validPublicKey(pubKey) {
 		redirectMsg(w, r, "/", "err", "Invalid WireGuard public key")
 		return
+	}
+
+	// Same cap as self-enrollment: a pending machine reserves no address here,
+	// but it still lands in the administrators' review queue.
+	if s.cfg.MaxPendingPerUser > 0 {
+		n, err := s.store.CountPendingByOwner(sess.UID)
+		if err != nil {
+			s.serverError(w, err)
+			return
+		}
+		if n >= s.cfg.MaxPendingPerUser {
+			redirectMsg(w, r, "/", "err", "Too many machines awaiting approval — ask an administrator")
+			return
+		}
 	}
 
 	m := &store.Machine{OwnerUID: sess.UID, OwnerName: sess.Name, Name: name, PublicKey: pubKey,
@@ -194,7 +208,7 @@ func (s *Server) handleEditMachine(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	pubKey := strings.TrimSpace(r.FormValue("public_key"))
 	if !validName(name) {
-		redirectMsg(w, r, "/", "err", "Machine name is required and must not contain control characters")
+		redirectMsg(w, r, "/", "err", "Machine name is required: at most 128 characters, no control characters")
 		return
 	}
 	if !validPublicKey(pubKey) {
@@ -235,6 +249,7 @@ func (s *Server) handleDeleteMachine(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, err)
 		return
 	}
+	s.audit(r, "machine.delete", m.OwnerUID+"/"+m.Name)
 	redirectMsg(w, r, "/", "ok", "Machine deleted")
 }
 

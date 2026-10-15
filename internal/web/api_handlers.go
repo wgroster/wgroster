@@ -116,7 +116,7 @@ func (s *Server) handleExpectedPeers(w http.ResponseWriter, r *http.Request) {
 		var b strings.Builder
 		for _, p := range peers {
 			fmt.Fprintf(&b, "[Peer]\n# %s (%s)\nPublicKey = %s\nAllowedIPs = %s\n\n",
-				sanitizeComment(p.Name), sanitizeComment(p.Owner), p.PublicKey, p.AllowedIPs)
+				wg.SanitizeComment(p.Name), wg.SanitizeComment(p.Owner), p.PublicKey, p.AllowedIPs)
 		}
 		w.Write([]byte(b.String()))
 		return

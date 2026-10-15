@@ -207,7 +207,7 @@ func (s *Server) handleAdoptPeer(w http.ResponseWriter, r *http.Request) {
 	address := strings.TrimSpace(r.PostFormValue("address"))
 
 	if !validName(owner) || !validName(name) {
-		redirectMsg(w, r, "/admin/status", "err", "Owner and machine name are required and must not contain control characters")
+		redirectMsg(w, r, "/admin/status", "err", "Owner and machine name are required: at most 128 characters each, no control characters")
 		return
 	}
 	// The dump parser only checks the shape loosely; hold an adopted key to the

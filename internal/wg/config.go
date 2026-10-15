@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"unicode"
 
 	"github.com/wgroster/wgroster/internal/store"
 )
@@ -42,7 +43,7 @@ func ClientConfig(m *store.Machine, endpoints []*store.Endpoint) string {
 
 	for _, e := range endpoints {
 		b.WriteString("\n[Peer]\n")
-		b.WriteString(fmt.Sprintf("# %s\n", e.Name))
+		b.WriteString(fmt.Sprintf("# %s\n", SanitizeComment(e.Name)))
 		b.WriteString(fmt.Sprintf("PublicKey = %s\n", e.PublicKey))
 		b.WriteString(fmt.Sprintf("Endpoint = %s\n", e.HostPort))
 		allowed := e.AllowedIPs
@@ -62,13 +63,12 @@ func ClientConfig(m *store.Machine, endpoints []*store.Endpoint) string {
 // itself: an [Interface] section for the concentrator plus one [Peer] per
 // machine currently expected to connect. The concentrator's private key is
 // never known to the portal, so a placeholder is emitted for the operator to
-// fill in. Names are validated (no control characters) at every write path, so
-// they are safe to emit directly on comment lines.
+// fill in.
 func ConcentratorConfig(e *store.Endpoint, machines []*store.Machine) string {
 	var b strings.Builder
 
 	b.WriteString("[Interface]\n")
-	b.WriteString(fmt.Sprintf("# %s concentrator\n", e.Name))
+	b.WriteString(fmt.Sprintf("# %s concentrator\n", SanitizeComment(e.Name)))
 	b.WriteString("# Replace with the concentrator's private key\n")
 	b.WriteString("PrivateKey = <CONCENTRATOR_PRIVATE_KEY>\n")
 	if e.TunnelIP != "" {
@@ -91,10 +91,24 @@ func ConcentratorConfig(e *store.Endpoint, machines []*store.Machine) string {
 			addr += "/32"
 		}
 		b.WriteString("\n[Peer]\n")
-		b.WriteString(fmt.Sprintf("# %s (%s)\n", m.Name, m.OwnerUID))
+		b.WriteString(fmt.Sprintf("# %s (%s)\n", SanitizeComment(m.Name), SanitizeComment(m.OwnerUID)))
 		b.WriteString(fmt.Sprintf("PublicKey = %s\n", m.PublicKey))
 		b.WriteString(fmt.Sprintf("AllowedIPs = %s\n", addr))
 	}
 
 	return b.String()
+}
+
+// SanitizeComment makes a label safe to emit on a single comment line of a
+// generated WireGuard config. Labels are validated at every write path, but
+// this is defense in depth at the rendering sink: any control character
+// (notably a newline) is replaced with a space so a stored value can never
+// break out of its "# name" line into an injected directive.
+func SanitizeComment(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
 }

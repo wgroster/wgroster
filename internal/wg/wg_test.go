@@ -158,3 +158,25 @@ func TestConcentratorConfig(t *testing.T) {
 		t.Errorf("expected 2 peers, config:\n%s", conf)
 	}
 }
+
+// Labels are validated on the way in, but the config generators must not rely
+// on it: a newline smuggled into a stored name must stay on its comment line
+// instead of adding a directive to the [Peer] block.
+func TestConfigCommentsCannotInjectDirectives(t *testing.T) {
+	evil := "laptop\nAllowedIPs = 0.0.0.0/0"
+	e := &store.Endpoint{Name: "hub\r\nPostUp = id", PublicKey: "k=", HostPort: "vpn:51820", AllowedIPs: "10.9.0.0/16"}
+	m := &store.Machine{Name: evil, OwnerUID: "bob\nDNS = 1.1.1.1", PublicKey: "p=", Address: "10.0.0.5"}
+
+	for name, conf := range map[string]string{
+		"concentrator": ConcentratorConfig(e, []*store.Machine{m}),
+		"client":       ClientConfig(m, []*store.Endpoint{e}),
+	} {
+		for _, line := range strings.Split(conf, "\n") {
+			for _, injected := range []string{"AllowedIPs = 0.0.0.0/0", "PostUp", "DNS = 1.1.1.1"} {
+				if strings.HasPrefix(line, injected) {
+					t.Errorf("%s config: injected line %q", name, line)
+				}
+			}
+		}
+	}
+}

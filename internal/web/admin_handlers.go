@@ -419,7 +419,7 @@ func (s *Server) handleAdminCreateMachine(w http.ResponseWriter, r *http.Request
 	endpointIDs := parseEndpointIDs(r.Form["endpoint_ids"])
 
 	if !validName(owner) || !validName(name) {
-		redirectMsg(w, r, "/admin/machines", "err", "Owner and machine name are required and must not contain control characters")
+		redirectMsg(w, r, "/admin/machines", "err", "Owner and machine name are required: at most 128 characters each, no control characters")
 		return
 	}
 	if !validPublicKey(pubKey) {
@@ -484,7 +484,7 @@ func (s *Server) handleUpdateMachine(w http.ResponseWriter, r *http.Request) {
 	endpointIDs := parseEndpointIDs(r.Form["endpoint_ids"])
 
 	if !validName(name) {
-		redirectMsg(w, r, "/admin/machines", "err", "Machine name is required and must not contain control characters")
+		redirectMsg(w, r, "/admin/machines", "err", "Machine name is required: at most 128 characters, no control characters")
 		return
 	}
 	if !validPublicKey(pubKey) {

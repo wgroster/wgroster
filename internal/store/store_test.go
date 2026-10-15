@@ -1,6 +1,8 @@
 package store
 
 import (
+	"os"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -180,6 +182,30 @@ func TestPendingMachinesShareEmptyAddress(t *testing.T) {
 		m := &Machine{OwnerUID: "alice", Name: string(rune('a' + i)), PublicKey: pk}
 		if err := st.CreateMachine(m); err != nil {
 			t.Fatalf("create %s: %v", pk, err)
+		}
+	}
+}
+
+// The database holds upload tokens and password hashes: it must end up private
+// even under a permissive umask. (That Open creates it 0600 up front, rather
+// than only tightening it afterwards, is not observable from here.)
+func TestOpenCreatesPrivateDatabase(t *testing.T) {
+	old := syscall.Umask(0)
+	defer syscall.Umask(old)
+
+	path := t.TempDir() + "/fresh.db"
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	for _, p := range []string{path, path + "-wal"} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			continue // the WAL may not exist yet
+		}
+		if perm := fi.Mode().Perm(); perm != 0o600 {
+			t.Errorf("%s created with mode %o, want 600", p, perm)
 		}
 	}
 }

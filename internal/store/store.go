@@ -171,6 +171,16 @@ CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
 
 // Open opens (and migrates) the SQLite database at path.
 func Open(path string) (*Store, error) {
+	// The database holds upload tokens and password hashes. Create it private
+	// rather than tightening it after the fact, so it is never readable under
+	// the process umask, not even briefly; SQLite gives the -wal and -shm files
+	// the main file's permissions.
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	f.Close()
+
 	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -200,7 +210,7 @@ func Open(path string) (*Store, error) {
 		}
 	}
 
-	// The database holds upload tokens and password hashes; keep it private.
+	// Databases created by an earlier version may still be world-readable.
 	for _, p := range []string{path, path + "-wal", path + "-shm"} {
 		if _, err := os.Stat(p); err == nil {
 			_ = os.Chmod(p, 0o600)
