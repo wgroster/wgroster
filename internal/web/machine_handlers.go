@@ -171,7 +171,9 @@ func (s *Server) handleMachineConfig(w http.ResponseWriter, r *http.Request) {
 // handleEditMachine lets a user edit their own machine's name, icon and public
 // key.
 // Address and endpoints stay admin-controlled and are never touched here.
-// Changing the public key sends the machine back to pending (admin re-approval).
+// Changing the public key sends the machine back to pending (admin re-approval),
+// whether it was active or disabled: a disabled machine must not come back into
+// service with a key nobody reviewed.
 func (s *Server) handleEditMachine(w http.ResponseWriter, r *http.Request) {
 	sess := sessionFrom(r)
 	id, err := pathID(r)
@@ -200,16 +202,12 @@ func (s *Server) handleEditMachine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keyChanged := pubKey != m.PublicKey
-	if err := s.store.UpdateMachineIdentity(id, name, pubKey, r.FormValue("icon")); err != nil {
+	requeued, err := s.store.UpdateOwnMachine(id, name, pubKey, r.FormValue("icon"))
+	if err != nil {
 		redirectMsg(w, r, "/", "err", "Could not save (public key already used?)")
 		return
 	}
-	if keyChanged && m.Status == store.StatusActive {
-		if err := s.store.SetMachinePending(id); err != nil {
-			s.serverError(w, err)
-			return
-		}
+	if requeued {
 		s.audit(r, "machine.key_change", m.OwnerUID+"/"+name)
 		redirectMsg(w, r, "/", "ok", "Public key changed — waiting for administrator re-approval")
 		return

@@ -1776,3 +1776,92 @@ func TestAdminMachinesHidesTrafficWhenHubIsQuiet(t *testing.T) {
 		t.Error("the tooltip should name the silent endpoint")
 	}
 }
+
+// TestKeyChangeRequiresReapproval: a new public key always goes back through an
+// administrator. For an active machine that keeps an unreviewed key off every
+// concentrator; for a disabled one it stops "enable" from putting the new key
+// into service as if it were the device that was disabled.
+func TestKeyChangeRequiresReapproval(t *testing.T) {
+	srv, h, cookies, csrf := testServer(t)
+
+	w := do(t, h, "POST", "/admin/endpoints", cookies, url.Values{
+		"csrf": {csrf}, "name": {"paris"}, "public_key": {key(2)},
+		"host_port": {"vpn-par:51820"}, "allowed_ips": {"192.168.1.0/24"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create endpoint: got %d (%s)", w.Code, w.Body)
+	}
+	eps, _ := srv.store.ListEndpoints()
+	epID := fmt.Sprint(eps[0].ID)
+
+	// The session is "admin", so this machine is also editable as its owner.
+	w = do(t, h, "POST", "/admin/machines", cookies, url.Values{
+		"csrf": {csrf}, "owner_uid": {"admin"}, "name": {"laptop"},
+		"public_key": {key(1)}, "address": {"10.0.0.5"}, "endpoint_ids": {epID},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("create machine: got %d (%s)", w.Code, w.Header().Get("Location"))
+	}
+	machines, _ := srv.store.ListMachines()
+	mID := machines[0].ID
+	status := func() string {
+		t.Helper()
+		m, err := srv.store.GetMachine(mID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m.Status
+	}
+	userEdit := func(k string) {
+		t.Helper()
+		w := do(t, h, "POST", fmt.Sprintf("/machines/%d", mID), cookies, url.Values{
+			"csrf": {csrf}, "name": {"laptop"}, "public_key": {k},
+		})
+		if w.Code != http.StatusSeeOther || strings.Contains(w.Header().Get("Location"), "err=") {
+			t.Fatalf("user edit: got %d %q", w.Code, w.Header().Get("Location"))
+		}
+	}
+
+	// Active machine: a new key sends it back to pending.
+	userEdit(key(3))
+	if got := status(); got != store.StatusPending {
+		t.Fatalf("active machine with a new key is %q, want pending", got)
+	}
+
+	// Approve it again, then disable it.
+	w = do(t, h, "POST", fmt.Sprintf("/admin/machines/%d", mID), cookies, url.Values{
+		"csrf": {csrf}, "name": {"laptop"}, "public_key": {key(3)},
+		"address": {"10.0.0.5"}, "endpoint_ids": {epID},
+	})
+	if got := status(); w.Code != http.StatusSeeOther || got != store.StatusActive {
+		t.Fatalf("re-approve: got %d, status %q", w.Code, got)
+	}
+	do(t, h, "POST", fmt.Sprintf("/admin/machines/%d/disable", mID), cookies, url.Values{"csrf": {csrf}})
+	if got := status(); got != store.StatusDisabled {
+		t.Fatalf("disable: status %q", got)
+	}
+
+	// Disabled machine: a new key sends it to pending too, so "enable" can no
+	// longer bring it back with that key.
+	userEdit(key(4))
+	if got := status(); got != store.StatusPending {
+		t.Fatalf("disabled machine with a new key is %q, want pending", got)
+	}
+	w = do(t, h, "POST", fmt.Sprintf("/admin/machines/%d/enable", mID), cookies, url.Values{"csrf": {csrf}})
+	if !strings.Contains(w.Header().Get("Location"), "err=") {
+		t.Errorf("enable after a key change should be refused, got %q", w.Header().Get("Location"))
+	}
+	if got := status(); got != store.StatusPending {
+		t.Errorf("after enable: status %q, want pending", got)
+	}
+	active, _ := srv.store.ActiveMachinesForEndpoint(eps[0].ID)
+	if len(active) != 0 {
+		t.Errorf("the unreviewed key is served to the concentrator: %+v", active[0])
+	}
+
+	// Without a key change, an edit leaves the status alone.
+	userEdit(key(4))
+	if got := status(); got != store.StatusPending {
+		t.Errorf("edit without key change moved the machine to %q", got)
+	}
+}

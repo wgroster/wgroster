@@ -63,6 +63,41 @@ func (s *Store) UpdateMachineIdentity(id int64, name, publicKey, icon string) er
 	return err
 }
 
+// UpdateOwnMachine applies an owner's edit of a machine's name, public key and
+// device icon. A new public key on a machine that is not already pending sends
+// it back to pending, in the same transaction: an active machine would
+// otherwise hand concentrators a key no administrator approved, and a disabled
+// one would come back into service with it on the next "enable". It reports
+// whether the machine was sent back for review.
+func (s *Store) UpdateOwnMachine(id int64, name, publicKey, icon string) (requeued bool, err error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	var oldKey, status string
+	if err := tx.QueryRow(`SELECT public_key, status FROM machine WHERE id=?`, id).Scan(&oldKey, &status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	if _, err := tx.Exec(`UPDATE machine SET name=?, public_key=?, icon=? WHERE id=?`,
+		name, publicKey, NormalizeIcon(icon), id); err != nil {
+		return false, err
+	}
+	requeued = publicKey != oldKey && status != StatusPending
+	if requeued {
+		if _, err := tx.Exec(
+			`UPDATE machine SET status=?, approved_at=NULL, approved_by='', pending_since=? WHERE id=?`,
+			StatusPending, time.Now().Unix(), id); err != nil {
+			return false, err
+		}
+	}
+	return requeued, tx.Commit()
+}
+
 // SetMachineAddress assigns an address to a machine (without changing status).
 func (s *Store) SetMachineAddress(id int64, address string) error {
 	_, err := s.db.Exec(`UPDATE machine SET address=? WHERE id=?`, address, id)
