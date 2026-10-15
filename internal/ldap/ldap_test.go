@@ -30,11 +30,12 @@ func seeded(t *testing.T) *fakeDir {
 	d.passwords[bobDN] = "hunter2"
 	d.passwords[serviceDN] = "svcpass"
 	d.entries[aliceDN] = map[string][]string{
+		"uid":         {"alice"},
 		"cn":          {"Alice Example"},
 		"displayName": {"Alice from the directory"},
 		"jpegPhoto":   {string(photo)},
 	}
-	d.entries[bobDN] = map[string][]string{"cn": {"Bob Example"}}
+	d.entries[bobDN] = map[string][]string{"uid": {"bob"}, "cn": {"Bob Example"}}
 	d.entries[groupDN] = map[string][]string{
 		"memberUid": {"alice", "carol"},
 		"member":    {aliceDN},
@@ -54,9 +55,12 @@ func baseCfg(d *fakeDir) config.LDAP {
 
 func TestAuthenticateAdmin(t *testing.T) {
 	d := seeded(t)
-	name, gotPhoto, isAdmin, err := New(baseCfg(d)).Authenticate("alice", "s3cret")
+	uid, name, gotPhoto, isAdmin, err := New(baseCfg(d)).Authenticate("alice", "s3cret")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
+	}
+	if uid != "alice" {
+		t.Errorf("uid = %q, want alice", uid)
 	}
 	if name != "Alice Example" {
 		t.Errorf("name = %q, want %q", name, "Alice Example")
@@ -90,7 +94,7 @@ func TestAuthenticateAdmin(t *testing.T) {
 
 func TestAuthenticateNonAdmin(t *testing.T) {
 	d := seeded(t)
-	name, _, isAdmin, err := New(baseCfg(d)).Authenticate("bob", "hunter2")
+	_, name, _, isAdmin, err := New(baseCfg(d)).Authenticate("bob", "hunter2")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -106,17 +110,17 @@ func TestAuthenticateRejectsBadCredentials(t *testing.T) {
 	d := seeded(t)
 	a := New(baseCfg(d))
 
-	if _, _, _, err := a.Authenticate("alice", "wrong"); !errors.Is(err, ErrInvalidCredentials) {
+	if _, _, _, _, err := a.Authenticate("alice", "wrong"); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("wrong password: err = %v, want ErrInvalidCredentials", err)
 	}
-	if _, _, _, err := a.Authenticate("ghost", "whatever"); !errors.Is(err, ErrInvalidCredentials) {
+	if _, _, _, _, err := a.Authenticate("ghost", "whatever"); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("unknown user: err = %v, want ErrInvalidCredentials", err)
 	}
 
 	// An empty password must be refused locally: an anonymous bind succeeds on
 	// many directories, which would turn a blank form into a valid login.
 	before := d.connCount()
-	if _, _, _, err := a.Authenticate("alice", ""); !errors.Is(err, ErrInvalidCredentials) {
+	if _, _, _, _, err := a.Authenticate("alice", ""); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("empty password: err = %v, want ErrInvalidCredentials", err)
 	}
 	if d.connCount() != before {
@@ -130,7 +134,7 @@ func TestAuthenticateMemberAttrUsesDN(t *testing.T) {
 	d := seeded(t)
 	cfg := baseCfg(d)
 	cfg.MemberAttr = "member"
-	_, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret")
+	_, _, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -148,7 +152,7 @@ func TestAuthenticateMemberAttrUsesDN(t *testing.T) {
 // escaped rather than allowed to restructure the DN.
 func TestAuthenticateEscapesUID(t *testing.T) {
 	d := seeded(t)
-	if _, _, _, err := New(baseCfg(d)).Authenticate(`al,ice+x`, "s3cret"); !errors.Is(err, ErrInvalidCredentials) {
+	if _, _, _, _, err := New(baseCfg(d)).Authenticate(`al,ice+x`, "s3cret"); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("err = %v, want ErrInvalidCredentials for an unknown user", err)
 	}
 	binds := d.bindLog()
@@ -165,7 +169,7 @@ func TestAuthenticateCustomAttributes(t *testing.T) {
 	cfg := baseCfg(d)
 	cfg.NameAttr = "displayName"
 	cfg.PhotoAttr = "" // photo lookups disabled
-	name, gotPhoto, _, err := New(cfg).Authenticate("alice", "s3cret")
+	_, name, gotPhoto, _, err := New(cfg).Authenticate("alice", "s3cret")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -176,8 +180,10 @@ func TestAuthenticateCustomAttributes(t *testing.T) {
 		t.Errorf("photo = %v, want none when photo_attr is empty", gotPhoto)
 	}
 	profile := d.searchLog()[0]
-	if len(profile.attrs) != 1 || profile.attrs[0] != "displayName" {
-		t.Errorf("requested attributes = %v, want [displayName] only", profile.attrs)
+	// The login attribute is read back alongside the name to learn the login
+	// as the directory stores it; no photo is requested.
+	if strings.Join(profile.attrs, ",") != "displayName,uid" {
+		t.Errorf("requested attributes = %v, want [displayName uid]", profile.attrs)
 	}
 }
 
@@ -186,7 +192,7 @@ func TestAuthenticateCustomAttributes(t *testing.T) {
 func TestAuthenticateProfileFailureStillLogsIn(t *testing.T) {
 	d := seeded(t)
 	delete(d.entries, aliceDN) // profile read now answers noSuchObject
-	name, gotPhoto, isAdmin, err := New(baseCfg(d)).Authenticate("alice", "s3cret")
+	_, name, gotPhoto, isAdmin, err := New(baseCfg(d)).Authenticate("alice", "s3cret")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -202,7 +208,7 @@ func TestAuthenticateProfileFailureStillLogsIn(t *testing.T) {
 func TestAuthenticateEmptyProfileResult(t *testing.T) {
 	d := seeded(t)
 	d.emptyFor[aliceDN] = true
-	name, _, _, err := New(baseCfg(d)).Authenticate("alice", "s3cret")
+	_, name, _, _, err := New(baseCfg(d)).Authenticate("alice", "s3cret")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -215,7 +221,7 @@ func TestAuthenticateWithoutAdminGroup(t *testing.T) {
 	d := seeded(t)
 	cfg := baseCfg(d)
 	cfg.AdminGroupDN = ""
-	_, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret")
+	_, _, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -237,7 +243,7 @@ func TestAuthenticateUsesServiceAccount(t *testing.T) {
 	cfg.SearchBindDN = serviceDN
 	cfg.SearchBindPassword = "svcpass"
 
-	if _, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret"); err != nil || !isAdmin {
+	if _, _, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret"); err != nil || !isAdmin {
 		t.Fatalf("Authenticate: isAdmin %v, err %v", isAdmin, err)
 	}
 	if n := d.connCount(); n != 2 {
@@ -260,7 +266,7 @@ func TestAuthenticateServiceAccountBindFailure(t *testing.T) {
 	cfg.SearchBindDN = serviceDN
 	cfg.SearchBindPassword = "wrong"
 
-	_, _, _, err := New(cfg).Authenticate("alice", "s3cret")
+	_, _, _, _, err := New(cfg).Authenticate("alice", "s3cret")
 	if err == nil {
 		t.Fatal("expected an error when the service account cannot bind")
 	}
@@ -275,7 +281,7 @@ func TestAuthenticateServiceAccountBindFailure(t *testing.T) {
 
 func TestAuthenticateUnreachableDirectory(t *testing.T) {
 	cfg := config.LDAP{URL: closedPortURL(t), BindDNPattern: peoplePattern}
-	_, _, _, err := New(cfg).Authenticate("alice", "s3cret")
+	_, _, _, _, err := New(cfg).Authenticate("alice", "s3cret")
 	if err == nil {
 		t.Fatal("expected a dial error")
 	}
@@ -347,7 +353,7 @@ func TestStartTLS(t *testing.T) {
 	cfg := baseCfg(d)
 	cfg.StartTLS = true
 	cfg.InsecureSkipVerify = true
-	name, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret")
+	_, name, _, isAdmin, err := New(cfg).Authenticate("alice", "s3cret")
 	if err != nil {
 		t.Fatalf("Authenticate over StartTLS: %v", err)
 	}
@@ -357,7 +363,7 @@ func TestStartTLS(t *testing.T) {
 
 	// The certificate is self-signed, so verification must fail once it is on.
 	cfg.InsecureSkipVerify = false
-	if _, _, _, err := New(cfg).Authenticate("alice", "s3cret"); err == nil {
+	if _, _, _, _, err := New(cfg).Authenticate("alice", "s3cret"); err == nil {
 		t.Error("expected certificate verification to fail without insecure_skip_verify")
 	}
 }
@@ -367,7 +373,7 @@ func TestStartTLSRefusedByDirectory(t *testing.T) {
 	cfg := baseCfg(d)
 	cfg.StartTLS = true
 
-	_, _, _, err := New(cfg).Authenticate("alice", "s3cret")
+	_, _, _, _, err := New(cfg).Authenticate("alice", "s3cret")
 	if err == nil {
 		t.Fatal("expected an error when the directory refuses StartTLS")
 	}
@@ -407,7 +413,7 @@ func TestFakeDirectorySanity(t *testing.T) {
 	if got := fmt.Sprintf(peoplePattern, "alice"); got != aliceDN {
 		t.Fatalf("pattern renders %q, want %q", got, aliceDN)
 	}
-	if _, _, _, err := New(baseCfg(d)).Authenticate("alice", "s3cret"); err != nil {
+	if _, _, _, _, err := New(baseCfg(d)).Authenticate("alice", "s3cret"); err != nil {
 		t.Fatalf("baseline login failed: %v", err)
 	}
 }
@@ -484,4 +490,81 @@ func TestLookupPresenceUnknownOnFailure(t *testing.T) {
 			t.Errorf("LookupPresence = %v, err %v, want PresenceUnknown / ErrProfileUnavailable", state, err)
 		}
 	})
+}
+
+// The directory matches logins case-insensitively and ignores surrounding
+// spaces, so a variant of a login binds as the same entry. Authenticate must
+// hand back the login the entry stores, so the portal sees one user, and check
+// group membership under it (memberUid is compared exactly).
+func TestAuthenticateReturnsStoredLogin(t *testing.T) {
+	d := seeded(t)
+	// The fake directory does not normalize DNs: register the variant the
+	// client will bind with as the same person a real directory would find.
+	variantDN := "uid=ALICE,ou=people,dc=example,dc=com"
+	d.passwords[variantDN] = "s3cret"
+	d.entries[variantDN] = d.entries[aliceDN]
+
+	uid, name, _, isAdmin, err := New(baseCfg(d)).Authenticate("  ALICE ", "s3cret")
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	if uid != "alice" {
+		t.Errorf("uid = %q, want the stored login alice", uid)
+	}
+	if name != "Alice Example" {
+		t.Errorf("name = %q", name)
+	}
+	if !isAdmin {
+		t.Error("isAdmin = false: membership must be checked under the stored login")
+	}
+	if binds := d.bindLog(); len(binds) != 1 || binds[0].dn != variantDN {
+		t.Errorf("binds = %+v, want the typed login trimmed in the DN", binds)
+	}
+	searches := d.searchLog()
+	if last := searches[len(searches)-1]; last.filterAttr != "memberUid" || last.filterValue != "alice" {
+		t.Errorf("group search = %+v, want memberUid=alice", last)
+	}
+}
+
+// The login attribute may hold several values: the one the typed login matched
+// is the identity, not merely the first.
+func TestAuthenticateMultiValuedLogin(t *testing.T) {
+	d := seeded(t)
+	d.entries[aliceDN]["uid"] = []string{"alice", "a.example"}
+	variantDN := "uid=A.Example,ou=people,dc=example,dc=com"
+	d.passwords[variantDN] = "s3cret"
+	d.entries[variantDN] = d.entries[aliceDN]
+
+	uid, _, _, _, err := New(baseCfg(d)).Authenticate("A.Example", "s3cret")
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	if uid != "a.example" {
+		t.Errorf("uid = %q, want a.example", uid)
+	}
+}
+
+// When the entry cannot be read back, the login stays the typed one, trimmed:
+// the profile is best-effort and must not block the login.
+func TestAuthenticateLoginFallsBackToTyped(t *testing.T) {
+	d := seeded(t)
+	delete(d.entries[bobDN], "uid") // login attribute not readable
+	uid, _, _, _, err := New(baseCfg(d)).Authenticate(" bob ", "hunter2")
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	if uid != "bob" {
+		t.Errorf("uid = %q, want bob", uid)
+	}
+}
+
+func TestFoldLogin(t *testing.T) {
+	for _, in := range []string{"alice", "Alice", " alice", "ALICE  ", "\talice"} {
+		if got := FoldLogin(in); got != "alice" {
+			t.Errorf("FoldLogin(%q) = %q, want alice", in, got)
+		}
+	}
+	if got := FoldLogin("Jean  Dupont"); got != "jean dupont" {
+		t.Errorf("inner spaces: got %q", got)
+	}
 }

@@ -1865,3 +1865,32 @@ func TestKeyChangeRequiresReapproval(t *testing.T) {
 		t.Errorf("edit without key change moved the machine to %q", got)
 	}
 }
+
+// TestLoginRateLimitFoldsUsername: the per-username limit must count every way
+// of typing one login together. The directory binds "Alice", " alice" and
+// "alice  " as the same account, so a fresh bucket per spelling would let a
+// password guesser spread over many source IPs go unthrottled.
+func TestLoginRateLimitFoldsUsername(t *testing.T) {
+	_, h, _, _ := testServer(t)
+
+	variants := []string{"alice", "Alice", " alice", "alice ", "ALICE", "  alice", "aLiCe", "alice  ", " ALICE ", "Alice  "}
+	attempt := func(i int, uid string) string {
+		t.Helper()
+		form := url.Values{"uid": {uid}, "password": {"guess"}}
+		r := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		// A different source address each time, so only the per-user limit applies.
+		r.RemoteAddr = fmt.Sprintf("198.51.100.%d:4242", i+1)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Header().Get("Location")
+	}
+	for i, uid := range variants {
+		if loc := attempt(i, uid); strings.Contains(loc, "Too+many") {
+			t.Fatalf("attempt %d (%q) throttled within the burst", i+1, uid)
+		}
+	}
+	if loc := attempt(len(variants), "  aLICE"); !strings.Contains(loc, "Too+many") {
+		t.Errorf("one more spelling of the same login was not throttled: %q", loc)
+	}
+}

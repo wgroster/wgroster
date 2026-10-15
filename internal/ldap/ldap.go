@@ -47,25 +47,33 @@ func (a *Authenticator) dial() (*ldap.Conn, error) {
 // be queried at all (LDAP not configured).
 var ErrProfileUnavailable = fmt.Errorf("ldap not configured")
 
-// Authenticate verifies the user's credentials and returns the user's display
-// name (cn), photo (may be nil) and whether the user is an administrator. The
-// uid is the login typed on the form.
-func (a *Authenticator) Authenticate(uid, password string) (name string, photo []byte, isAdmin bool, err error) {
+// Authenticate verifies the user's credentials and returns the user's login as
+// the directory stores it, display name (cn), photo (may be nil) and whether the
+// user is an administrator. The uid is the login typed on the form.
+//
+// The returned login is what the caller must use as the user's identity, not
+// the typed one: directories match the login attribute case-insensitively and
+// ignore surrounding spaces, so "alice", "Alice" and " alice" all bind as the
+// same entry. Keying sessions and machines on the typed string would split one
+// person into several owners (and several per-owner quotas). When the entry
+// cannot be read back, the typed login, trimmed, is returned.
+func (a *Authenticator) Authenticate(uid, password string) (canonUID, name string, photo []byte, isAdmin bool, err error) {
 	if password == "" {
-		return "", nil, false, ErrInvalidCredentials
+		return "", "", nil, false, ErrInvalidCredentials
 	}
+	uid = strings.TrimSpace(uid)
 	conn, err := a.dial()
 	if err != nil {
-		return "", nil, false, err
+		return "", "", nil, false, err
 	}
 	defer conn.Close()
 
 	userDN := fmt.Sprintf(a.cfg.BindDNPattern, ldap.EscapeDN(uid))
 	if err := conn.Bind(userDN, password); err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials) {
-			return "", nil, false, ErrInvalidCredentials
+			return "", "", nil, false, ErrInvalidCredentials
 		}
-		return "", nil, false, fmt.Errorf("ldap bind: %w", err)
+		return "", "", nil, false, fmt.Errorf("ldap bind: %w", err)
 	}
 
 	// Connection used for lookups: a service account when configured, otherwise
@@ -74,24 +82,62 @@ func (a *Authenticator) Authenticate(uid, password string) (name string, photo [
 	if a.cfg.SearchBindDN != "" {
 		sc, err := a.dial()
 		if err != nil {
-			return "", nil, false, err
+			return "", "", nil, false, err
 		}
 		defer sc.Close()
 		if err := sc.Bind(a.cfg.SearchBindDN, a.cfg.SearchBindPassword); err != nil {
-			return "", nil, false, fmt.Errorf("ldap search bind: %w", err)
+			return "", "", nil, false, fmt.Errorf("ldap search bind: %w", err)
 		}
 		search = sc
 	}
 
-	// A failed profile read must not fail the login; treat name/photo as best-effort.
-	name, photo, _ = a.lookupProfile(search, userDN)
+	// A failed profile read must not fail the login; treat name/photo as
+	// best-effort, and keep the typed login when the stored one is unknown.
+	stored, name, photo, _ := a.lookupProfile(search, userDN, a.loginAttr())
+	canonUID = canonicalLogin(uid, stored)
+	if canonUID != uid {
+		userDN = fmt.Sprintf(a.cfg.BindDNPattern, ldap.EscapeDN(canonUID))
+	}
 	if a.cfg.AdminGroupDN != "" {
-		isAdmin, err = a.isMember(search, uid, userDN)
+		isAdmin, err = a.isMember(search, canonUID, userDN)
 		if err != nil {
-			return "", nil, false, err
+			return "", "", nil, false, err
 		}
 	}
-	return name, photo, isAdmin, nil
+	return canonUID, name, photo, isAdmin, nil
+}
+
+// loginAttr returns the attribute the bind DN pattern puts the login in ("uid"
+// for "uid=%s,ou=people,dc=example,dc=com"), or "" when the pattern does not
+// have that shape.
+func (a *Authenticator) loginAttr() string {
+	pattern := a.cfg.BindDNPattern
+	i := strings.Index(pattern, "=%s")
+	if i < 0 {
+		return ""
+	}
+	return strings.TrimSpace(pattern[strings.LastIndexAny(pattern[:i], ",+")+1 : i])
+}
+
+// canonicalLogin picks, among the values the entry stores for its login
+// attribute, the one the typed login matched, compared the way the directory
+// does (case and surrounding/repeated spaces ignored). The attribute may be
+// multi-valued, so the match matters; without one the typed login is kept.
+func canonicalLogin(typed string, stored []string) string {
+	for _, v := range stored {
+		if FoldLogin(v) == FoldLogin(typed) {
+			return v
+		}
+	}
+	return typed
+}
+
+// FoldLogin reduces a login to the form under which the directory considers two
+// logins equal: lower case, without surrounding spaces, inner runs of spaces
+// collapsed. Use it to key anything per user before the directory has said who
+// the user is (login rate limiting), so variants of one login share a key.
+func FoldLogin(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }
 
 // ProfileLookupEnabled reports whether the directory can be queried for
@@ -124,7 +170,8 @@ func (a *Authenticator) LookupProfile(uid string) (name string, photo []byte, er
 		}
 	}
 	userDN := fmt.Sprintf(a.cfg.BindDNPattern, ldap.EscapeDN(uid))
-	return a.lookupProfile(conn, userDN)
+	_, name, photo, err = a.lookupProfile(conn, userDN, "")
+	return name, photo, err
 }
 
 // Presence is the outcome of a directory existence check for a user.
@@ -185,12 +232,13 @@ func (a *Authenticator) LookupPresence(uid string) (Presence, error) {
 }
 
 // lookupProfile reads the user's display-name (cn by default) and photo
-// (jpegPhoto by default) attributes with a base-scoped search on the user DN.
+// (jpegPhoto by default) attributes with a base-scoped search on the user DN,
+// plus the values of loginAttr when it is not empty.
 // A search transport error is returned so callers can avoid caching an empty
 // profile after a transient failure; a genuinely absent entry or attribute is
 // not an error (empty name/photo, nil error) so it can be cached as "known
 // empty" without re-querying on every page load.
-func (a *Authenticator) lookupProfile(conn *ldap.Conn, userDN string) (name string, photo []byte, err error) {
+func (a *Authenticator) lookupProfile(conn *ldap.Conn, userDN, loginAttr string) (logins []string, name string, photo []byte, err error) {
 	nameAttr := a.cfg.NameAttr
 	if nameAttr == "" {
 		nameAttr = "cn"
@@ -199,22 +247,29 @@ func (a *Authenticator) lookupProfile(conn *ldap.Conn, userDN string) (name stri
 	if a.cfg.PhotoAttr != "" {
 		attrs = append(attrs, a.cfg.PhotoAttr)
 	}
+	if loginAttr != "" {
+		attrs = append(attrs, loginAttr)
+	}
 	req := ldap.NewSearchRequest(
 		userDN, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 0, false,
 		"(objectClass=*)", attrs, nil,
 	)
 	res, err := conn.Search(req)
 	if err != nil {
-		return "", nil, err
+		return nil, "", nil, err
 	}
 	if len(res.Entries) == 0 {
-		return "", nil, nil
+		return nil, "", nil, nil
 	}
-	name = res.Entries[0].GetAttributeValue(nameAttr)
+	entry := res.Entries[0]
+	name = entry.GetAttributeValue(nameAttr)
 	if a.cfg.PhotoAttr != "" {
-		photo = res.Entries[0].GetRawAttributeValue(a.cfg.PhotoAttr)
+		photo = entry.GetRawAttributeValue(a.cfg.PhotoAttr)
 	}
-	return name, photo, nil
+	if loginAttr != "" {
+		logins = entry.GetAttributeValues(loginAttr)
+	}
+	return logins, name, photo, nil
 }
 
 // isMember checks membership of the admin group on the given connection.

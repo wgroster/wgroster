@@ -31,15 +31,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?err=Too+many+attempts,+try+again+later", http.StatusSeeOther)
 		return
 	}
-	uid := r.FormValue("uid")
+	uid := strings.TrimSpace(r.FormValue("uid"))
 	password := r.FormValue("password")
 	if uid == "" || password == "" {
 		http.Redirect(w, r, "/login?err=Missing+credentials", http.StatusSeeOther)
 		return
 	}
-	// Also rate-limit per username (lower-cased) so distributing attempts across
-	// many source IPs cannot brute-force one account unthrottled.
-	if !s.userLimiter.allow(strings.ToLower(uid)) {
+	// Also rate-limit per username so distributing attempts across many source
+	// IPs cannot brute-force one account unthrottled. The key is folded the way
+	// the directory compares logins: otherwise "Alice", " alice" or "alice  "
+	// would each get a fresh bucket while binding as the same account.
+	if !s.userLimiter.allow(ldap.FoldLogin(uid)) {
 		http.Redirect(w, r, "/login?err=Too+many+attempts,+try+again+later", http.StatusSeeOther)
 		return
 	}
@@ -63,7 +65,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name, photo, admin, err := s.auth.Authenticate(uid, password)
+	// From here on the user is who the directory says, not what was typed.
+	uid, name, photo, admin, err := s.auth.Authenticate(uid, password)
 	if err != nil {
 		if errors.Is(err, ldap.ErrInvalidCredentials) {
 			http.Redirect(w, r, "/login?err=Invalid+credentials", http.StatusSeeOther)
