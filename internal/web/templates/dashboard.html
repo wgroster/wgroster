@@ -83,7 +83,7 @@
 {{end}}
 
 <script src="/static/nacl.min.js?v={{.AssetV}}" defer></script>
-{{if .SelfEnroll}}<script src="/static/qrcode.min.js?v={{.AssetV}}" defer></script>{{end}}
+{{if .SelfEnroll}}<script src="/static/qrcode-generator.js?v={{.AssetV}}" defer></script>{{end}}
 
 {{template "dashboard_list" .Data}}
 {{end}}

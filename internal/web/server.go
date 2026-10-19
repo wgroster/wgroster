@@ -100,7 +100,7 @@ func (s *Server) Handler() http.Handler {
 		w.Write([]byte("ok"))
 	})
 
-	// Self-hosted, embedded assets (Tailwind CSS, htmx, qrcode, app.js).
+	// Self-hosted, embedded assets (Tailwind CSS, htmx, qrcode-generator, app.js).
 	assets := http.FileServerFS(staticFS)
 	mux.Handle("GET /static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// URLs are content-versioned (?v=hash), so the body for a given URL never
@@ -170,13 +170,13 @@ func (s *Server) serverError(w http.ResponseWriter, err error) {
 
 // contentSecurityPolicy locks the page to first-party resources only. All
 // assets (CSS/JS) are self-hosted and there is no inline script or style, so
-// no 'unsafe-inline'/'unsafe-eval' is needed. QR codes render to data: images.
+// no 'unsafe-inline'/'unsafe-eval' is needed. QR codes render as inline SVG.
 // form-action is spelled out because default-src does not cover it: it keeps an
 // injected form from posting credentials or a CSRF token to another origin.
 const contentSecurityPolicy = "default-src 'self'; " +
 	"base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
 	"form-action 'self'; " +
-	"img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
+	"img-src 'self'; font-src 'self'; connect-src 'self'; " +
 	"style-src 'self'; script-src 'self'"
 
 func pathID(r *http.Request) (int64, error) {

@@ -40,6 +40,20 @@
     flash(btn, ok ? "copied!" : "copy failed");
   }
 
+  // renderQR draws text as a QR code (byte mode, UTF-8, error correction L)
+  // into target, as inline SVG of about px pixels including a 4-module quiet
+  // zone. Cells stay a whole number of pixels: fractional ones render unevenly
+  // and stop decoding at this size. The SVG carries no style attribute, so it
+  // is fine under the CSP.
+  function renderQR(target, text, px) {
+    qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+    var q = qrcode(0, "L");
+    q.addData(text, "Byte");
+    q.make();
+    var cell = Math.max(2, Math.round(px / (q.getModuleCount() + 8)));
+    target.innerHTML = q.createSvgTag({ cellSize: cell, margin: cell * 4 });
+  }
+
   // buildConfig returns the configuration with the placeholder replaced by the
   // private key typed in the (browser-only) field, or null if not available.
   function buildConfig() {
@@ -139,11 +153,9 @@
     if (action === "qr") {
       var conf = buildConfig();
       if (!conf) { showMsg("Enter your private key first."); return; }
-      if (typeof QRCode === "undefined") { showMsg("QR library could not be loaded."); return; }
+      if (typeof qrcode === "undefined") { showMsg("QR library could not be loaded."); return; }
       showMsg("");
-      var target = document.getElementById("qr");
-      target.innerHTML = "";
-      new QRCode(target, { text: conf, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.L });
+      renderQR(document.getElementById("qr"), conf, 240);
     } else if (action === "download-complete") {
       var c = buildConfig();
       if (!c) { showMsg("Enter your private key first."); return; }
@@ -230,7 +242,7 @@
       var pre = document.getElementById("enroll-conf");
       if (pre) pre.textContent = conf;
       var qr = document.getElementById("enroll-qr");
-      if (qr && typeof QRCode !== "undefined") { qr.innerHTML = ""; new QRCode(qr, { text: conf, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L }); }
+      if (qr && typeof qrcode !== "undefined") renderQR(qr, conf, 220);
       var dl = document.querySelector('[data-action="download-el"][data-target="#enroll-conf"]');
       if (dl) dl.setAttribute("data-fname", name);
       if (res && res.focus) res.focus();

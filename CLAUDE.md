@@ -93,8 +93,9 @@ registered in `render.go` (`fullPages` / `partials`). Template funcs (e.g.
   right after it (guarded against "duplicate column name"). `SetMaxOpenConns(1)`
   — writes are serialized; keep queries simple.
 - **Security posture** (do not regress): strict CSP with self-hosted assets and
-  **no inline script/style** (`img-src 'self' data:` covers avatars/QR); all
-  mutating routes require a CSRF token; login rejects cross-origin POSTs; secrets
+  **no inline script/style** (`img-src 'self'`: avatars come from
+  `/avatar/{uid}`, QR codes are inline SVG); all mutating routes require a CSRF
+  token; login rejects cross-origin POSTs; secrets
   (tokens, hashes, photos) live only in the 0600 DB. Fields written line-by-line
   into wg configs are rejected if they contain control chars (config injection).
 - **LDAP profiles**: name (`name_attr`, default `cn`) and photo (`photo_attr`,

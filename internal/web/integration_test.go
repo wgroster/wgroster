@@ -281,7 +281,7 @@ func TestMetricsAndSecurityHeaders(t *testing.T) {
 	}
 
 	// Embedded assets are served.
-	for _, asset := range []string{"/static/app.css", "/static/app.js", "/static/htmx.min.js", "/static/qrcode.min.js"} {
+	for _, asset := range []string{"/static/app.css", "/static/app.js", "/static/htmx.min.js", "/static/qrcode-generator.js"} {
 		a := do(t, h, "GET", asset, nil, nil)
 		if a.Code != http.StatusOK {
 			t.Errorf("asset %s: got %d, want 200", asset, a.Code)
